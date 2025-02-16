@@ -1,15 +1,22 @@
 {
     "name": "propelauth-cli",
     "version": "0.0.1",
-    "description": "",
+    "description": "PropelAuth CLI tool",
     "type": "module",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "bin": {
+        "propelauth": "./dist/index.js"
+    },
+    "files": [
+        "dist"
+    ],
     "scripts": {
         "build": "tsc",
         "dev": "tsc --watch",
         "start": "node dist/index.js",
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "prepublishOnly": "npm run build"
     },
     "author": "Andrew Israel",
     "license": "MIT",

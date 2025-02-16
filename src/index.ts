@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import { Command } from 'commander'
 import setupNextJsAppRouter from './commands/setup-nextjs-app-router'
 
