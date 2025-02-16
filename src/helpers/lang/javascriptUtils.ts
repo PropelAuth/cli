@@ -18,13 +18,15 @@ export async function readPackageJson(targetPath: string): Promise<Record<string
     return JSON.parse(data)
 }
 
-export async function detectPackageManager(targetPath: string): Promise<'npm' | 'yarn' | 'pnpm' | 'bun' | null> {
+type PackageManager = 'npm' | 'yarn' | 'pnpm' | 'bun' | 'skip'
+
+export async function detectPackageManager(targetPath: string): Promise<PackageManager | undefined> {
     const files = await fs.readdir(targetPath)
     if (files.includes('package-lock.json')) return 'npm'
     if (files.includes('yarn.lock')) return 'yarn'
     if (files.includes('pnpm-lock.yaml')) return 'pnpm'
     if (files.includes('bun.lockb')) return 'bun'
-    return null
+    return undefined
 }
 
 export async function promptForJsInstall(
@@ -37,27 +39,27 @@ export async function promptForJsInstall(
 
     const options = [
         {
-            value: 'npm',
+            value: 'npm' as const,
             label: `npm install ${packageName}`,
             hint: detectedPM === 'npm' ? 'detected' : undefined,
         },
         {
-            value: 'yarn',
+            value: 'yarn' as const,
             label: `yarn add ${packageName}`,
             hint: detectedPM === 'yarn' ? 'detected' : undefined,
         },
         {
-            value: 'pnpm',
+            value: 'pnpm' as const,
             label: `pnpm install ${packageName}`,
             hint: detectedPM === 'pnpm' ? 'detected' : undefined,
         },
         {
-            value: 'bun',
+            value: 'bun' as const,
             label: `bun install ${packageName}`,
             hint: detectedPM === 'bun' ? 'detected' : undefined,
         },
         {
-            value: 'skip',
+            value: 'skip' as const,
             label: 'Skip installation',
             hint: 'Install dependencies later',
         },

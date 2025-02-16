@@ -1,28 +1,30 @@
-import fs from 'fs/promises'
 import path from 'path'
-import { spinner, intro, outro, confirm, select } from '@clack/prompts'
-import { isCancel } from '@clack/core'
 import pc from 'picocolors'
-import { fileExists, overwriteFileWithConfirmation } from '../helpers/fileUtils'
-import { updateEnvFile } from '../helpers/envUtils'
+import { spinner, intro, outro, confirm } from '@clack/prompts'
+import { isCancel } from '@clack/core'
 
-interface EnvVar {
-    description: string
-    required: boolean
-    default?: string
+import { updateEnvFile } from '../helpers/envUtils'
+import { ensureDirectory, loadResource, overwriteFileWithConfirmation } from '../helpers/fileUtils'
+import { validateNextJsProject } from '../helpers/framework/nextJsUtils'
+import { promptForJsInstall } from '../helpers/lang/javascriptUtils'
+
+type Spinner = {
+    start: (msg?: string) => void
+    stop: (msg?: string) => void
 }
 
-const REQUIRED_ENV_VARS: Record<string, EnvVar> = {
+const REQUIRED_ENV_VARS = {
     NEXT_PUBLIC_AUTH_URL: {
         description: 'Your Auth URL',
         required: true,
+        default: '',
     },
     PROPELAUTH_API_KEY: {
-        description: 'An API Key generated via the PropelAuth Dashboard',
+        description: 'Your API key for PropelAuth',
         required: true,
     },
     PROPELAUTH_VERIFIER_KEY: {
-        description: 'Verifier Key from PropelAuth Dashboard',
+        description: 'Verifier Key from the dashboard',
         required: true,
     },
     PROPELAUTH_REDIRECT_URI: {
@@ -32,106 +34,99 @@ const REQUIRED_ENV_VARS: Record<string, EnvVar> = {
     },
 }
 
-async function validateNextJsProject(targetPath: string, s: ReturnType<typeof spinner>): Promise<boolean> {
+export default async function setupNextJs(targetDir?: string): Promise<void> {
+    intro(pc.cyan('Setting up authentication in Next.js project'))
+
+    const s: Spinner = spinner()
+    const targetPath = path.resolve(process.cwd(), targetDir || '.')
+
     try {
-        const packageJsonPath = path.join(targetPath, 'package.json')
-        const packageJsonExists = await fileExists(packageJsonPath)
-        
-        if (!packageJsonExists) {
-            s.stop('No package.json found. Are you in a Next.js project directory?')
-            return false
+        const { nextVersion, appRouterDir, pagesRouterDir, isUsingSrcDir } = await validateNextJsProject(targetPath, s)
+
+        // Ensure that they are using the app router
+        if (!appRouterDir) {
+            outro(pc.red('This project does not appear to be using the App Router.'))
+            process.exit(1)
         }
 
-        const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'))
-        if (!packageJson.dependencies?.next) {
-            s.stop('This does not appear to be a Next.js project (no next dependency found)')
-            return false
-        }
+        await promptForJsInstall(targetPath, s, '@propelauth/nextjs')
 
-        return true
-    } catch (error) {
-        s.stop(`Error validating Next.js project: ${error.message}`)
-        return false
-    }
-}
-
-type PackageManager = 'npm' | 'yarn' | 'pnpm'
-
-async function detectPackageManager(targetPath: string): Promise<PackageManager> {
-    const files = await fs.readdir(targetPath)
-    
-    if (files.includes('yarn.lock')) return 'yarn'
-    if (files.includes('pnpm-lock.yaml')) return 'pnpm'
-    return 'npm'
-}
-
-interface InstallOptions {
-    withAuth: boolean
-    withTailwind: boolean
-}
-
-async function promptForInstall(targetPath: string, s: ReturnType<typeof spinner>): Promise<InstallOptions | symbol> {
-    const withAuth = await confirm({
-        message: 'Would you like to install @propelauth/nextjs?',
-        initialValue: true,
-    })
-
-    if (isCancel(withAuth)) return withAuth
-
-    const withTailwind = await confirm({
-        message: 'Would you like to install Tailwind CSS for styling?',
-        initialValue: true,
-    })
-
-    if (isCancel(withTailwind)) return withTailwind
-
-    return { withAuth, withTailwind }
-}
-
-async function setupNextJs(targetDir?: string): Promise<void> {
-    intro(pc.blue('Setting up PropelAuth in your Next.js App Router project'))
-    
-    const s = spinner()
-    try {
-        const targetPath = path.resolve(targetDir || process.cwd())
-        s.start('Validating Next.js project')
-        
-        const isValid = await validateNextJsProject(targetPath, s)
-        if (!isValid) return
-
-        s.stop('Project validation successful')
-
-        const options = await promptForInstall(targetPath, s)
-        if (isCancel(options)) {
-            outro('Setup cancelled')
-            return
-        }
-
-        const packageManager = await detectPackageManager(targetPath)
-        
-        if ((options as InstallOptions).withAuth) {
-            s.start('Installing @propelauth/nextjs')
-            // Installation commands would go here
-            s.stop('Installed @propelauth/nextjs')
-        }
-
-        if ((options as InstallOptions).withTailwind) {
-            s.start('Installing Tailwind CSS')
-            // Tailwind installation commands would go here
-            s.stop('Installed Tailwind CSS')
-        }
-
-        s.start('Setting up environment variables')
         const envPath = path.join(targetPath, '.env.local')
-        await updateEnvFile(envPath, REQUIRED_ENV_VARS)
-        s.stop('Environment variables configured')
+        await updateEnvFile(envPath, REQUIRED_ENV_VARS, s)
 
-        outro(pc.green('Setup complete! 🎉'))
-        
-    } catch (error) {
-        s.stop(`Error: ${error.message}`)
+        if (appRouterDir) {
+            const authApiDir = path.join(appRouterDir, 'api', 'auth', '[slug]')
+            await ensureDirectory(authApiDir, s)
+
+            const routeTemplatePath = path.join(__dirname, 'templates', 'nextjs', 'route.ts')
+            let routeContent = await loadResource(routeTemplatePath)
+            const nextMajor = parseInt((nextVersion || '15').split('.')[0], 10)
+            const useAsyncHandlers = nextMajor >= 15
+            if (!useAsyncHandlers) {
+                routeContent = routeContent
+                    .replace('getRouteHandlerAsync', 'getRouteHandler')
+                    .replace('postRouteHandlerAsync', 'postRouteHandler')
+            }
+            const routeFilePath = path.join(authApiDir, 'route.ts')
+            await overwriteFileWithConfirmation(routeFilePath, routeContent, 'Auth route.ts', s)
+
+            const middlewareTemplatePath = path.join(__dirname, 'templates', 'nextjs', 'middleware.ts')
+            const middlewareContent = await loadResource(middlewareTemplatePath)
+            const middlewareFilePath = path.join(targetPath, isUsingSrcDir ? 'src/middleware.ts' : 'middleware.ts')
+            await overwriteFileWithConfirmation(middlewareFilePath, middlewareContent, 'Middleware file', s)
+
+            const layoutPath = path.join(appRouterDir, 'layout.tsx')
+            s.start('Checking root layout configuration')
+            try {
+                await (await import('fs')).promises.stat(layoutPath)
+                s.stop('Found root layout at ' + pc.cyan(path.relative(targetPath, layoutPath)))
+
+                outro(`
+${pc.cyan('Root Layout Changes Required:')}
+
+1. Add this import at the top of ${pc.cyan(layoutPath)}:
+   ${pc.green('import { AuthProvider } from "@propelauth/nextjs/client";')}
+
+2. Wrap your children with AuthProvider:
+
+   ${pc.dim('Before:')}
+   ${pc.yellow('<html lang="en">')}
+     ${pc.yellow('<body>{children}</body>')}
+   ${pc.yellow('</html>')}
+
+   ${pc.dim('After:')}
+   ${pc.green('<AuthProvider authUrl={process.env.NEXT_PUBLIC_AUTH_URL!}>')}
+     ${pc.yellow('<html lang="en">')}
+       ${pc.yellow('<body>{children}</body>')}
+     ${pc.yellow('</html>')}
+   ${pc.green('</AuthProvider>')}
+`)
+
+                const answer = await confirm({
+                    message: 'Have you made these changes to your root layout?',
+                    active: pc.green('yes'),
+                    inactive: pc.yellow('no'),
+                    initialValue: false,
+                })
+                if (isCancel(answer)) {
+                    outro(pc.red('Setup cancelled'))
+                    process.exit(0)
+                }
+                if (!answer) {
+                    outro(pc.yellow('Please make the required changes to your root layout.'))
+                }
+            } catch (err) {
+                s.stop(pc.yellow('No root layout found; skipping instructions for AuthProvider setup.'))
+            }
+        }
+
+        outro(pc.green('Next.js setup completed!'))
+        outro(`${pc.cyan('Next steps:')}
+1. Fill in your environment variables in ${pc.cyan('.env.local')}
+2. Confirm your authentication config in the dashboard or .env file
+3. Enjoy your new Next.js project with authentication!`)
+    } catch (error: any) {
+        outro(pc.red(`Error: ${error.message}`))
         process.exit(1)
     }
 }
-
-export default setupNextJs
