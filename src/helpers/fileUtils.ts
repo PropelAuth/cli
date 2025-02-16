@@ -4,10 +4,26 @@ import pc from 'picocolors'
 import { confirm, outro } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 import { createTwoFilesPatch } from 'diff'
+import os from 'os'
+import untildify from 'untildify'
 
 type Spinner = {
     start: (msg?: string) => void
     stop: (msg?: string) => void
+}
+
+/**
+ * Resolves a path that can be absolute, relative, or start with ~
+ * - Absolute paths are returned as-is
+ * - Relative paths are resolved relative to process.cwd()
+ * - Paths starting with ~ are resolved relative to the user's home directory
+ */
+export function resolvePath(inputPath: string | undefined): string {
+    if (!inputPath) {
+        return process.cwd()
+    }
+
+    return path.resolve(untildify(inputPath))
 }
 
 export async function ensureDirectory(dirPath: string, spinner?: Spinner): Promise<void> {

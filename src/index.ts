@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander'
-import setupNextJsAppRouter from './commands/setup-nextjs-app-router'
+import setupNextJsAppRouter from './commands/setup-nextjs-app-router.js'
+import { resolvePath } from './helpers/fileUtils.js'
 
 const program = new Command()
 
@@ -12,7 +13,8 @@ program
     .description('Set up PropelAuth authentication in a Next.js App Router project')
     .argument('[directory]', 'Target directory (defaults to current directory)')
     .action(async (directory: string | undefined) => {
-        await setupNextJsAppRouter(directory)
+        const resolvedPath = resolvePath(directory)
+        await setupNextJsAppRouter(resolvedPath)
     })
 
 // Note: Other commands will be converted in subsequent steps

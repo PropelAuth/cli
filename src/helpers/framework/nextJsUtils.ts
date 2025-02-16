@@ -1,7 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import pc from 'picocolors'
-import { readPackageJson } from '../lang/javascriptUtils'
+import { readPackageJson } from '../lang/javascriptUtils.js'
 
 type Spinner = {
     start: (msg?: string) => void
@@ -10,14 +10,13 @@ type Spinner = {
 
 export async function validateNextJsProject(
     targetPath: string,
-    spinner?: Spinner
+    s: Spinner
 ): Promise<{
     nextVersion: string | null
     appRouterDir: string | null
     pagesRouterDir: string | null
     isUsingSrcDir: boolean
 }> {
-    const s = spinner || { start: () => {}, stop: () => {} }
     s.start('Checking for Next.js project details...')
 
     let nextVersion: string | null = null
@@ -28,10 +27,12 @@ export async function validateNextJsProject(
         const pkg = await readPackageJson(targetPath)
         nextVersion = pkg.dependencies?.next || pkg.devDependencies?.next || null
         if (!nextVersion) {
-            s.stop(pc.yellow('Next.js not found in package.json, continuing anyway'))
+            s.stop(pc.yellow('Next.js not found in package.json'))
+            process.exit(1)
         }
     } catch (err) {
-        s.stop(pc.yellow('No package.json found or it was invalid, continuing anyway'))
+        s.stop(pc.yellow('No package.json found or it was invalid'))
+        process.exit(1)
     }
 
     const possibleAppDirs = [path.join(targetPath, 'app'), path.join(targetPath, 'src', 'app')]

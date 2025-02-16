@@ -3,10 +3,10 @@ import pc from 'picocolors'
 import { spinner, intro, outro, confirm } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 
-import { updateEnvFile } from '../helpers/envUtils'
-import { ensureDirectory, loadResource, overwriteFileWithConfirmation } from '../helpers/fileUtils'
-import { validateNextJsProject } from '../helpers/framework/nextJsUtils'
-import { promptForJsInstall } from '../helpers/lang/javascriptUtils'
+import { updateEnvFile } from '../helpers/envUtils.js'
+import { ensureDirectory, loadResource, overwriteFileWithConfirmation } from '../helpers/fileUtils.js'
+import { validateNextJsProject } from '../helpers/framework/nextJsUtils.js'
+import { promptForJsInstall } from '../helpers/lang/javascriptUtils.js'
 
 type Spinner = {
     start: (msg?: string) => void
@@ -34,7 +34,7 @@ const REQUIRED_ENV_VARS = {
     },
 }
 
-export default async function setupNextJs(targetDir?: string): Promise<void> {
+export default async function setupNextJsAppRouter(targetDir: string): Promise<void> {
     intro(pc.cyan('Setting up authentication in Next.js project'))
 
     const s: Spinner = spinner()
