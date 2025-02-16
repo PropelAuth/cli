@@ -1,26 +1,31 @@
 {
-  "name": "propelauth-cli",
-  "version": "0.0.1",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "Andrew Israel",
-  "license": "MIT",
-  "dependencies": {
-    "@clack/prompts": "^0.7.0",
-    "@propelauth/backend-js-utilities": "^0.3.0",
-    "@propelauth/node": "^2.1.20",
-    "commander": "^12.1.0",
-    "diff": "^7.0.0",
-    "dotenv": "^16.4.5",
-    "is-unicode-supported": "^2.0.0",
-    "picocolors": "^1.0.1"
-  },
-  "devDependencies": {
-    "@types/diff": "^7.0.1",
-    "@types/node": "^22.13.0",
-    "typescript": "^5.7.3"
-  }
+    "name": "propelauth-cli",
+    "version": "0.0.1",
+    "description": "",
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "start": "node dist/index.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "author": "Andrew Israel",
+    "license": "MIT",
+    "dependencies": {
+        "@clack/prompts": "^0.7.0",
+        "@propelauth/backend-js-utilities": "^0.3.0",
+        "@propelauth/node": "^2.1.20",
+        "commander": "^12.1.0",
+        "diff": "^7.0.0",
+        "dotenv": "^16.4.5",
+        "is-unicode-supported": "^2.0.0",
+        "picocolors": "^1.0.1"
+    },
+    "devDependencies": {
+        "@types/diff": "^7.0.1",
+        "@types/node": "^22.13.0",
+        "typescript": "^5.7.3"
+    }
 }
