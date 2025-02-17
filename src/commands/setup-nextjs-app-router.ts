@@ -4,9 +4,10 @@ import { spinner, intro, outro, confirm } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 
 import { updateEnvFile } from '../helpers/envUtils.js'
-import { ensureDirectory, loadResource, overwriteFileWithConfirmation } from '../helpers/fileUtils.js'
+import { ensureDirectory, overwriteFileWithConfirmation } from '../helpers/fileUtils.js'
 import { validateNextJsProject } from '../helpers/framework/nextJsUtils.js'
 import { promptForJsInstall } from '../helpers/lang/javascriptUtils.js'
+import { loadTemplateResource } from '../helpers/templateUtils.js'
 
 type Spinner = {
     start: (msg?: string) => void
@@ -58,8 +59,7 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
             const authApiDir = path.join(appRouterDir, 'api', 'auth', '[slug]')
             await ensureDirectory(authApiDir, s)
 
-            const routeTemplatePath = path.join(__dirname, 'templates', 'nextjs', 'route.ts')
-            let routeContent = await loadResource(routeTemplatePath)
+            let routeContent = await loadTemplateResource('nextjs', 'route.ts')
             const nextMajor = parseInt((nextVersion || '15').split('.')[0], 10)
             const useAsyncHandlers = nextMajor >= 15
             if (!useAsyncHandlers) {
@@ -67,11 +67,11 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
                     .replace('getRouteHandlerAsync', 'getRouteHandler')
                     .replace('postRouteHandlerAsync', 'postRouteHandler')
             }
+
             const routeFilePath = path.join(authApiDir, 'route.ts')
             await overwriteFileWithConfirmation(routeFilePath, routeContent, 'Auth route.ts', s)
 
-            const middlewareTemplatePath = path.join(__dirname, 'templates', 'nextjs', 'middleware.ts')
-            const middlewareContent = await loadResource(middlewareTemplatePath)
+            const middlewareContent = await loadTemplateResource('nextjs', 'middleware.ts')
             const middlewareFilePath = path.join(targetPath, isUsingSrcDir ? 'src/middleware.ts' : 'middleware.ts')
             await overwriteFileWithConfirmation(middlewareFilePath, middlewareContent, 'Middleware file', s)
 
