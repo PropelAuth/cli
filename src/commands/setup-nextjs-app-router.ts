@@ -95,11 +95,13 @@ ${pc.cyan('Root Layout Changes Required:')}
    ${pc.yellow('</html>')}
 
    ${pc.dim('After:')}
-   ${pc.green('<AuthProvider authUrl={process.env.NEXT_PUBLIC_AUTH_URL!}>')}
-     ${pc.yellow('<html lang="en">')}
-       ${pc.yellow('<body>{children}</body>')}
-     ${pc.yellow('</html>')}
-   ${pc.green('</AuthProvider>')}
+   ${pc.yellow('<html lang="en">')}
+     ${pc.yellow('<body>')}
+       ${pc.green('<AuthProvider authUrl={process.env.NEXT_PUBLIC_AUTH_URL!}>')}
+         ${pc.green('{children}')}
+       ${pc.green('</AuthProvider>')}
+     ${pc.yellow('</body>')}
+   ${pc.yellow('</html>')}
 `)
 
                 const answer = await confirm({
@@ -120,13 +122,16 @@ ${pc.cyan('Root Layout Changes Required:')}
             }
         }
 
-        outro(pc.green('Next.js setup completed!'))
+        outro(pc.green('PropelAuth setup completed!'))
+        // TODO: the .env.local file should pull from an API
+        // TODO: it should also update the default redirect paths via an API
         outro(`${pc.cyan('Next steps:')}
 1. Fill in your environment variables in ${pc.cyan('.env.local')}
-2. Confirm your authentication config in the dashboard or .env file
-3. Enjoy your new Next.js project with authentication!`)
-    } catch (error: any) {
-        outro(pc.red(`Error: ${error.message}`))
+2. Configure your PropelAuth Dashboard:
+   - Set Default redirect path after login to: ${pc.green('/api/auth/callback')}
+   - Set Default redirect path after logout to: ${pc.green('/api/auth/logout')}`)
+    } catch (error) {
+        outro(pc.red(`Error: ${error}`))
         process.exit(1)
     }
 }

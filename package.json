@@ -12,7 +12,7 @@
         "dist"
     ],
     "scripts": {
-        "build": "tsc",
+        "build": "tsc && copyfiles -u 1 templates/**/* dist/helpers/templates",
         "dev": "tsc --watch",
         "start": "node dist/index.js",
         "test": "echo \"Error: no test specified\" && exit 1",
@@ -34,6 +34,7 @@
     "devDependencies": {
         "@types/diff": "^7.0.1",
         "@types/node": "^22.13.0",
+        "copyfiles": "^2.4.1",
         "typescript": "^5.7.3"
     }
 }
