@@ -2,6 +2,8 @@
 
 import { Command } from 'commander'
 import setupNextJsAppRouter from './commands/setup-nextjs-app-router.js'
+import login from './commands/login.js'
+import setDefaultProject from './commands/set-default-project.js'
 import { resolvePath } from './helpers/fileUtils.js'
 
 const program = new Command()
@@ -15,6 +17,20 @@ program
     .action(async (directory: string | undefined) => {
         const resolvedPath = resolvePath(directory)
         await setupNextJsAppRouter(resolvedPath)
+    })
+
+program
+    .command('login')
+    .description('Login to PropelAuth')
+    .action(async () => {
+        await login()
+    })
+
+program
+    .command('set-default-project')
+    .description('Set the default project to use')
+    .action(async () => {
+        await setDefaultProject()
     })
 
 // Note: Other commands will be converted in subsequent steps
