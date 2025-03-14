@@ -1,96 +1,9 @@
-import path from 'path'
-import os from 'os'
 import fs from 'fs/promises'
 import pc from 'picocolors'
-import { intro, outro, password, confirm, spinner, select } from '@clack/prompts'
+import { intro, outro, password, confirm, spinner } from '@clack/prompts'
 import { isCancel } from '@clack/core'
-import { ProjectResponse } from '../types/api.js'
 import { fetchProjects } from '../api.js'
-
-const CONFIG_DIR = path.join(os.homedir(), '.propelauth')
-export const CONFIG_FILE = path.join(CONFIG_DIR, 'config')
-
-export interface PropelauthConfig {
-    apiKey: string
-    selectedProject?: {
-        orgId: string
-        projectId: string
-        displayName: string
-    }
-}
-
-export async function getConfig(): Promise<PropelauthConfig | null> {
-    try {
-        const configStr = await fs.readFile(CONFIG_FILE, 'utf-8')
-        return JSON.parse(configStr) as PropelauthConfig
-    } catch {
-        return null
-    }
-}
-
-export async function getApiKey(): Promise<string | null> {
-    const config = await getConfig()
-    return config?.apiKey?.trim() ?? null
-}
-
-function formatProjectName(project: ProjectResponse): string {
-    const maxLength = process.stdout.columns - 10 // Leave some padding
-    const displayName = `${project.org_name} / ${project.name}`
-
-    if (displayName.length <= maxLength) {
-        return displayName
-    }
-
-    // If we need to truncate, ensure we show at least some of both parts
-    const halfMax = Math.floor(maxLength / 2) - 2 // -2 for the " / " separator
-    const orgPart = project.org_name.slice(0, halfMax)
-    const projectPart = project.name.slice(0, halfMax)
-    return `${orgPart}... / ${projectPart}...`
-}
-
-export async function selectProject(
-    projects: ProjectResponse[],
-    currentProjectId?: string
-): Promise<PropelauthConfig['selectedProject'] | null> {
-    if (projects.length === 0) {
-        return null
-    }
-
-    // Sort projects: current first, then alphabetically by org/name
-    const sortedProjects = [...projects].sort((a, b) => {
-        // Current project always comes first
-        if (a.project_id === currentProjectId) return -1
-        if (b.project_id === currentProjectId) return 1
-
-        // Otherwise sort by org name, then project name
-        const aName = `${a.org_name} / ${a.name}`.toLowerCase()
-        const bName = `${b.org_name} / ${b.name}`.toLowerCase()
-        return aName.localeCompare(bName)
-    })
-
-    const choices = sortedProjects.map((project) => ({
-        value: project,
-        label: formatProjectName(project),
-        hint: project.project_id === currentProjectId ? 'current' : undefined,
-    }))
-
-    const selected: symbol | ProjectResponse = await select({
-        message: 'Select a project to use',
-        options: choices,
-        initialValue: choices[0].value,
-    })
-
-    if (isCancel(selected)) {
-        outro(pc.red('Project selection cancelled'))
-        process.exit(0)
-    }
-
-    return {
-        orgId: selected.org_id,
-        projectId: selected.project_id,
-        displayName: formatProjectName(selected),
-    }
-}
+import { CONFIG_FILE, PropelAuthConfig, getConfig, selectProject } from '../helpers/projectUtils.js'
 
 async function promptForApiKey(): Promise<string | null> {
     // Prompt user to visit the API key creation page
@@ -113,7 +26,7 @@ async function promptForApiKey(): Promise<string | null> {
 }
 
 export default async function login(): Promise<void> {
-    intro(pc.green('PropelAuth Login'))
+    intro(pc.cyan('⚡ PropelAuth Login'))
 
     // Check if config already exists
     const config = await getConfig()
@@ -134,7 +47,7 @@ export default async function login(): Promise<void> {
         }
 
         if (!shouldOverwrite) {
-            outro(pc.green('Using existing API key'))
+            outro(pc.green('✓ Using existing API key'))
             skipSettingKey = true
         } else {
             skipSettingKey = false
@@ -146,10 +59,15 @@ export default async function login(): Promise<void> {
         if (!apiKey) return
 
         // Create config directory if it doesn't exist
-        await fs.mkdir(CONFIG_DIR, { recursive: true })
+        await fs.mkdir(CONFIG_FILE.replace('/config', ''), { recursive: true })
 
         // Save the API key
-        const newConfig: PropelauthConfig = { apiKey }
+        const newConfig: PropelAuthConfig = {
+            apiKey,
+            projectSelection: {
+                option: 'always-ask',
+            },
+        }
         await fs.writeFile(CONFIG_FILE, JSON.stringify(newConfig, null, 2))
 
         existingApiKey = apiKey
@@ -162,24 +80,39 @@ export default async function login(): Promise<void> {
         const result = await fetchProjects(existingApiKey)
 
         if (result.success) {
-            s.stop('Projects fetched successfully')
+            s.stop('✓ Projects fetched successfully')
 
-            const selectedProject = await selectProject(result.data.projects, config?.selectedProject?.projectId)
-            if (selectedProject) {
+            const currentProjectId =
+                config?.projectSelection?.option === 'use-default'
+                    ? config.projectSelection.defaultProject.projectId
+                    : undefined
+
+            const projectSelection = await selectProject(result.data.projects, currentProjectId)
+
+            if (projectSelection) {
                 // Save the API key and selected project
-                const newConfig: PropelauthConfig = {
+                const newConfig: PropelAuthConfig = {
                     apiKey: existingApiKey,
-                    selectedProject,
+                    projectSelection,
                 }
                 await fs.writeFile(CONFIG_FILE, JSON.stringify(newConfig, null, 2))
 
-                outro(pc.green(`Successfully logged in and selected project ${pc.cyan(selectedProject.displayName)}`))
+                if (projectSelection.option === 'always-ask') {
+                    outro(pc.green('✓ Successfully logged in'))
+                    outro(pc.cyan('ℹ You will be prompted to select a project for each command'))
+                } else {
+                    outro(
+                        pc.green(
+                            `✓ Successfully logged in and selected project ${pc.cyan(projectSelection.defaultProject.displayName)}`
+                        )
+                    )
+                }
             } else {
-                outro(pc.yellow('No projects available to select'))
+                outro(pc.yellow('⚠ No projects available to select'))
             }
             break
         } else {
-            s.stop('Failed to fetch projects')
+            s.stop(pc.red('✗ Failed to fetch projects'))
             if (result.error === 'unauthorized') {
                 console.error(pc.red('\nError: Invalid API key'))
 
@@ -198,7 +131,12 @@ export default async function login(): Promise<void> {
                 if (!newApiKey) return
 
                 // Save the new API key
-                const newConfig: PropelauthConfig = { apiKey: newApiKey }
+                const newConfig: PropelAuthConfig = {
+                    apiKey: newApiKey,
+                    projectSelection: {
+                        option: 'always-ask',
+                    },
+                }
                 await fs.writeFile(CONFIG_FILE, JSON.stringify(newConfig, null, 2))
                 existingApiKey = newApiKey
                 continue

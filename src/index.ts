@@ -8,7 +8,7 @@ import { resolvePath } from './helpers/fileUtils.js'
 
 const program = new Command()
 
-program.name('propelauth').description('CLI for setting up and debugging PropelAuth authentication').version('0.0.1')
+program.name('propelauth').description('CLI for setting up and debugging PropelAuth authentication').version('0.0.2')
 
 program
     .command('setup-nextjs-app-router')
@@ -32,7 +32,5 @@ program
     .action(async () => {
         await setDefaultProject()
     })
-
-// Note: Other commands will be converted in subsequent steps
 
 program.parseAsync()
