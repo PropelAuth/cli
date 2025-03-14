@@ -163,20 +163,20 @@ This is a quick overview of the steps:
 4. Configured PropelAuth redirect paths for localhost:${port}`)
 
         // Show example usage code snippets
-        log.info(`
+        console.log(`
 ${pc.cyan('Example Usage:')}
 ${pc.dim('─────────────────────────────────────────────')}
 
 ${pc.bold('Server Component Example:')}
-${pc.green(`import { getUserOrRedirect } from "@propelauth/nextjs/server/app-router";
+import { getUserOrRedirect } from "@propelauth/nextjs/server/app-router";
 
 const WelcomeMessage = async () => {
     const user = await getUserOrRedirect()
     return <div>Welcome, {user.email}!</div>
-}`)}
+}
 
 ${pc.bold('Client Component Example:')}
-${pc.green(`"use client";
+"use client";
 
 import { useUser } from "@propelauth/nextjs/client";
 
@@ -189,12 +189,11 @@ const WelcomeMessage = () => {
     } else {
         return <div>Please log in to be welcomed</div>
     }
-}`)}
+}
 ${pc.dim('─────────────────────────────────────────────')}
 
 ${pc.cyan('For full documentation and more examples, visit:')}
-${pc.underline('https://docs.propelauth.com/reference/fullstack-apis/nextjsapp/installation-and-setup')}`
-        )
+${pc.underline('https://docs.propelauth.com/reference/fullstack-apis/nextjsapp/installation-and-setup')}`)
         outro(pc.green('PropelAuth has been successfully set up in your Next.js project!'))
         process.exit(0)
     } catch (error) {
