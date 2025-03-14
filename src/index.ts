@@ -3,6 +3,7 @@
 import { Command } from 'commander'
 import setup from './commands/setup.js'
 import login from './commands/login.js'
+import logout from './commands/logout.js'
 import setDefaultProject from './commands/set-default-project.js'
 import { resolvePath } from './helpers/fileUtils.js'
 
@@ -26,6 +27,13 @@ program
     .description('Login to PropelAuth')
     .action(async () => {
         await login()
+    })
+
+program
+    .command('logout')
+    .description('Logout from PropelAuth')
+    .action(async () => {
+        await logout()
     })
 
 program
