@@ -1,7 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import pc from 'picocolors'
-import { confirm, outro } from '@clack/prompts'
+import { confirm, log, outro } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 import { createTwoFilesPatch } from 'diff'
 import os from 'os'
@@ -70,9 +70,9 @@ export async function overwriteFileWithConfirmation(
 
     if (showDiff) {
         const patch = createTwoFilesPatch(path.basename(filePath), path.basename(filePath), existingContent, newContent)
-        console.log(pc.magenta('--- DIFF ---------------------------------------------------------'))
-        console.log(patch)
-        console.log(pc.magenta('------------------------------------------------------------------'))
+        log.info(pc.magenta('--- DIFF ---------------------------------------------------------'))
+        log.info(patch)
+        log.info(pc.magenta('------------------------------------------------------------------'))
     }
 
     s.stop(`${description} at ${pc.cyan(filePath)} differs from what we expected.`)

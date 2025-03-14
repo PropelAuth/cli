@@ -1,15 +1,15 @@
 import fs from 'fs/promises'
 import pc from 'picocolors'
-import { intro, outro, password, confirm, spinner } from '@clack/prompts'
+import { intro, outro, password, confirm, spinner, log } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 import { fetchProjects } from '../api.js'
 import { CONFIG_FILE, PropelAuthConfig, getConfig, selectProject } from '../helpers/projectUtils.js'
 
 async function promptForApiKey(): Promise<string | null> {
     // Prompt user to visit the API key creation page
-    console.log('\nPlease visit the following URL to create a personal API key:')
-    console.log(pc.underline(pc.cyan('https://auth.propelauth.com/api_keys/personal')))
-    console.log()
+    log.info('\nPlease visit the following URL to create a personal API key:')
+    log.info(pc.underline(pc.cyan('https://auth.propelauth.com/api_keys/personal')))
+    log.info('')
 
     // Get API key from user
     const apiKey = await password({
