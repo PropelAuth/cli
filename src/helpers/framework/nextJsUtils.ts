@@ -1,7 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import pc from 'picocolors'
-import { confirm, outro, text } from '@clack/prompts'
+import { confirm, outro, text, log } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 import { readPackageJson } from '../lang/javascriptUtils.js'
 import { updateEnvFile } from '../envUtils.js'
@@ -151,7 +151,7 @@ export async function configureNextJsEnvironmentVariables(
             apiKeyValue = createKeyResult.data.api_key
             s.stop('✓ Created new API key')
         } else {
-            outro(pc.yellow('⚠ No API key generated. You will need to fill in the PROPELAUTH_API_KEY value manually.'))
+            log.warn('⚠ No API key generated. You will need to fill in the PROPELAUTH_API_KEY value manually.')
         }
     }
 
@@ -238,7 +238,9 @@ export async function configureNextJsRedirectPaths(
 
     if (needsUpdate) {
         s.stop('Current settings need updating')
-        console.log(pc.cyan('The following settings will be updated:') + updateMessage)
+        
+        // Use log.info for consistent formatting
+        log.info(pc.cyan('The following settings will be updated:') + updateMessage)
 
         const confirmUpdate = await confirm({
             message: 'Would you like to update these settings?',
@@ -251,9 +253,8 @@ export async function configureNextJsRedirectPaths(
         }
 
         if (!confirmUpdate) {
-            console.log(
-                pc.yellow('⚠ Settings not updated. You may need to update your PropelAuth dashboard manually.')
-            )
+            // Use log.warn for warning messages
+            log.warn('⚠ Settings not updated. You may need to update your PropelAuth dashboard manually.')
             return
         }
 
@@ -334,12 +335,12 @@ export async function validateNextJsProject(
 
     const isUsingSrcDir = !!(appRouterDir?.includes('src') || pagesRouterDir?.includes('src'))
 
-    s.stop(
-        `Detected Next.js ${pc.green(nextVersion || '(unknown)')} 
-     App Router: ${appRouterDir ? pc.cyan(path.relative(targetPath, appRouterDir)) : pc.yellow('not found')}
-     Pages Router: ${pagesRouterDir ? pc.cyan(path.relative(targetPath, pagesRouterDir)) : pc.yellow('not found')}
-    `
-    )
+    s.stop('Found project details')
+    
+    // Use log.info with consistent formatting
+    log.info(`Detected Next.js ${pc.green(nextVersion || '(unknown)')}
+App Router: ${appRouterDir ? pc.cyan(path.relative(targetPath, appRouterDir)) : pc.yellow('not found')}
+Pages Router: ${pagesRouterDir ? pc.cyan(path.relative(targetPath, pagesRouterDir)) : pc.yellow('not found')}`)
 
     return {
         nextVersion,

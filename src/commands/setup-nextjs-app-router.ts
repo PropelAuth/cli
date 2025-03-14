@@ -1,6 +1,6 @@
 import path from 'path'
 import pc from 'picocolors'
-import { spinner, intro, outro, confirm, text } from '@clack/prompts'
+import { spinner, intro, outro, confirm, text, log } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 
 import { ensureDirectory, overwriteFileWithConfirmation } from '../helpers/fileUtils.js'
@@ -20,9 +20,9 @@ type Spinner = {
 }
 
 export default async function setupNextJsAppRouter(targetDir: string): Promise<void> {
-    const introMessage = `${pc.cyan('⚡ Setting up authentication in Next.js project')}
+    intro(pc.cyan('⚡ Setting up authentication in Next.js project'))
 
-${pc.cyan('Welcome!')} We are going to set up your Next.js App Router project with PropelAuth authentication.
+    log.info(`${pc.cyan('Welcome!')} We are going to set up your Next.js App Router project with PropelAuth authentication.
 
 This is a quick overview of the steps:
 1. Select the PropelAuth project to tie this Next.js application to
@@ -31,33 +31,39 @@ This is a quick overview of the steps:
 4. Install required dependencies (@propelauth/nextjs)
 5. Set up auth API route handlers
 6. Set up middleware for authentication
-7. Update your root layout
+7. Update your root layout`)
 
-Let's get started!\n`
+    const shouldProceed = await confirm({
+        message: 'Ready to get started?',
+    })
 
-    intro(introMessage)
+    if (isCancel(shouldProceed) || !shouldProceed) {
+        outro(pc.red('Ok, bye!'))
+        process.exit(0)
+    }
 
     const targetPath = path.resolve(process.cwd(), targetDir || '.')
+    const s = spinner()
 
     try {
         // Prompt for project selection if needed
+        log.info(pc.cyan('Selecting PropelAuth project'))
         const selectedProject = await promptForProjectIfNeeded()
         if (!selectedProject) {
-            outro(pc.red('No project selected. Please run the login command first.'))
+            log.error('No project selected. Please run the login command first.')
             process.exit(1)
         }
+        log.success(`✓ Using project: ${pc.cyan(selectedProject.displayName)}`)
 
-        outro(pc.green(`✓ Using project: ${pc.cyan(selectedProject.displayName)}`))
-
-        intro('Validating Next.js project structure')
-        const { nextVersion, appRouterDir, isUsingSrcDir } = await validateNextJsProject(targetPath, spinner())
-        outro(
+        log.info('Checking Next.js project')
+        const { nextVersion, appRouterDir, isUsingSrcDir } = await validateNextJsProject(targetPath, s)
+        log.success(
             `✓ Found Next.js ${nextVersion || 'unknown'} project with App Router${appRouterDir ? ' at ' + pc.cyan(path.relative(targetPath, appRouterDir)) : ''}`
         )
 
         // Ensure that they are using the app router
         if (!appRouterDir) {
-            outro(pc.red('This project does not appear to be using the App Router.'))
+            log.error('This project does not appear to be using the App Router.')
             process.exit(1)
         }
 
@@ -67,17 +73,16 @@ Let's get started!\n`
         // Configure environment variables with values from the PropelAuth API
         intro(pc.cyan('Setting up environment variables'))
         const envPath = path.join(targetPath, '.env.local')
-        await configureNextJsEnvironmentVariables(envPath, selectedProject, spinner())
+        await configureNextJsEnvironmentVariables(envPath, selectedProject, s)
 
         // Configure redirect paths in PropelAuth dashboard
         intro(pc.cyan('Configuring PropelAuth redirect paths'))
-        await configureNextJsRedirectPaths(selectedProject, spinner(), port)
+        await configureNextJsRedirectPaths(selectedProject, s, port)
 
         intro(pc.cyan('Installing dependencies'))
-        await promptForJsInstall(targetPath, spinner(), '@propelauth/nextjs')
+        await promptForJsInstall(targetPath, s, '@propelauth/nextjs')
 
         intro(pc.cyan('Creating authentication routes'))
-        const s = spinner()
         s.start('Setting up API route handlers')
         const authApiDir = path.join(appRouterDir, 'api', 'auth', '[slug]')
         await ensureDirectory(authApiDir, s)
@@ -110,8 +115,7 @@ Let's get started!\n`
             await (await import('fs')).promises.stat(layoutPath)
             s.stop('✓ Found root layout at ' + pc.cyan(path.relative(targetPath, layoutPath)))
 
-            outro(`
-${pc.cyan('Root Layout Changes Required:')}
+            log.info(`${pc.cyan('Root Layout Changes Required:')}
 
 1. Add this import at the top of ${pc.cyan(layoutPath)}:
    ${pc.green('import { AuthProvider } from "@propelauth/nextjs/client";')}
@@ -130,8 +134,7 @@ ${pc.cyan('Root Layout Changes Required:')}
          ${pc.green('{children}')}
        ${pc.green('</AuthProvider>')}
      ${pc.yellow('</body>')}
-   ${pc.yellow('</html>')}
-`)
+   ${pc.yellow('</html>')}`)
 
             const answer = await confirm({
                 message: 'Have you made these changes to your root layout?',
@@ -150,15 +153,15 @@ ${pc.cyan('Root Layout Changes Required:')}
             s.stop(pc.yellow('⚠ No root layout found; skipping instructions for AuthProvider setup.'))
         }
 
-        outro(pc.green('✓ PropelAuth setup completed!'))
+        log.success('✓ PropelAuth setup completed!')
 
-        const outroMessage = `Summary of changes:
+        log.info(`Summary of changes:
 
 1. Added authentication API routes at ${pc.cyan(`${path.relative(targetPath, authApiDir)}/route.ts`)}
 2. Added middleware at ${pc.cyan(path.relative(targetPath, middlewareFilePath))}
 3. Created/updated environment variables in ${pc.cyan('.env.local')}
-4. Configured PropelAuth redirect paths for localhost:${port}`
-        outro(outroMessage)
+4. Configured PropelAuth redirect paths for localhost:${port}`)
+        outro(pc.green('PropelAuth has been successfully set up in your Next.js project!'))
         process.exit(0)
     } catch (error) {
         outro(pc.red(`Error: ${error}`))
