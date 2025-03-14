@@ -5,8 +5,8 @@ import { confirm, text } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 import { readPackageJson } from '../lang/javascriptUtils.js'
 import { updateEnvFile } from '../envUtils.js'
-import { getApiKey } from '../projectUtils.js'
-import { ProjectResponse, TestEnv } from '../../types/api.js'
+import { getApiKey, PropelAuthProject } from '../projectUtils.js'
+import { TestEnv } from '../../types/api.js'
 import { fetchBackendIntegration, fetchFrontendIntegration, updateFrontendIntegration, createApiKey } from '../../api.js'
 
 type Spinner = {
@@ -72,7 +72,7 @@ export async function parseEnvVars(envContent: string): Promise<Record<string, s
 
 export async function configureNextJsEnvironmentVariables(
     envPath: string,
-    selectedProject: ProjectResponse,
+    selectedProject: PropelAuthProject,
     s: Spinner
 ): Promise<void> {
     s.start('Fetching project configuration from PropelAuth')
@@ -84,7 +84,7 @@ export async function configureNextJsEnvironmentVariables(
     }
 
     // Fetch backend integration details
-    const beResult = await fetchBackendIntegration(apiKey, selectedProject.org_id, selectedProject.project_id)
+    const beResult = await fetchBackendIntegration(apiKey, selectedProject.orgId, selectedProject.projectId)
 
     if (!beResult.success) {
         s.stop('Failed to fetch backend integration details')
@@ -134,7 +134,7 @@ export async function configureNextJsEnvironmentVariables(
             }
 
             s.start('Creating new API key')
-            const createKeyResult = await createApiKey(apiKey, selectedProject.org_id, selectedProject.project_id, {
+            const createKeyResult = await createApiKey(apiKey, selectedProject.orgId, selectedProject.projectId, {
                 name: keyName.toString(),
                 read_only: false,
             })
@@ -183,7 +183,7 @@ export async function configureNextJsEnvironmentVariables(
 }
 
 export async function configureNextJsRedirectPaths(
-    selectedProject: ProjectResponse,
+    selectedProject: PropelAuthProject,
     s: Spinner,
     port: number = 3000
 ): Promise<void> {
@@ -196,7 +196,7 @@ export async function configureNextJsRedirectPaths(
     }
 
     // Fetch current frontend integration details
-    const feResult = await fetchFrontendIntegration(apiKey, selectedProject.org_id, selectedProject.project_id)
+    const feResult = await fetchFrontendIntegration(apiKey, selectedProject.orgId, selectedProject.projectId)
 
     if (!feResult.success) {
         s.stop('Failed to fetch frontend integration details')
@@ -260,8 +260,8 @@ export async function configureNextJsRedirectPaths(
 
         const updateResult = await updateFrontendIntegration(
             apiKey,
-            selectedProject.org_id,
-            selectedProject.project_id,
+            selectedProject.orgId,
+            selectedProject.projectId,
             {
                 test_env: testEnv,
                 login_redirect_path: loginRedirectPath,

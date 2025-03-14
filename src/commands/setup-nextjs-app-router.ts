@@ -4,16 +4,15 @@ import { spinner, intro, outro, confirm } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 
 import { ensureDirectory, overwriteFileWithConfirmation } from '../helpers/fileUtils.js'
-import { 
-    validateNextJsProject, 
-    getPort, 
-    configureNextJsEnvironmentVariables, 
-    configureNextJsRedirectPaths 
+import {
+    validateNextJsProject,
+    getPort,
+    configureNextJsEnvironmentVariables,
+    configureNextJsRedirectPaths,
 } from '../helpers/framework/nextJsUtils.js'
 import { promptForJsInstall } from '../helpers/lang/javascriptUtils.js'
 import { loadTemplateResource } from '../helpers/templateUtils.js'
 import { promptForProjectIfNeeded } from '../helpers/projectUtils.js'
-import { ProjectResponse } from '../types/api.js'
 
 type Spinner = {
     start: (msg?: string) => void
@@ -34,7 +33,7 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
             process.exit(1)
         }
 
-        outro(pc.green(`✓ Using project: ${pc.cyan(`${selectedProject.org_name} / ${selectedProject.name}`)}`))
+        outro(pc.green(`✓ Using project: ${pc.cyan(selectedProject.displayName)}`))
 
         // Explain the setup process before starting
         console.log(pc.cyan('\nSetup Process Overview:'))

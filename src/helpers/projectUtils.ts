@@ -2,14 +2,19 @@ import path from 'path'
 import os from 'os'
 import fs from 'fs/promises'
 import pc from 'picocolors'
-import { select, outro, spinner, confirm, text } from '@clack/prompts'
+import { select, outro, spinner } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 import { ProjectResponse, TestEnv } from '../types/api.js'
-import { fetchProjects, fetchBackendIntegration, fetchFrontendIntegration, updateFrontendIntegration, createApiKey } from '../api.js'
-import { updateEnvFile } from './envUtils.js'
+import { fetchProjects } from '../api.js'
 
 const CONFIG_DIR = path.join(os.homedir(), '.propelauth')
 export const CONFIG_FILE = path.join(CONFIG_DIR, 'config')
+
+export interface PropelAuthProject {
+    orgId: string
+    projectId: string
+    displayName: string
+}
 
 export interface PropelAuthConfig {
     apiKey: string
@@ -19,11 +24,7 @@ export interface PropelAuthConfig {
           }
         | {
               option: 'use-default'
-              defaultProject: {
-                  orgId: string
-                  projectId: string
-                  displayName: string
-              }
+              defaultProject: PropelAuthProject
           }
 }
 
@@ -127,32 +128,38 @@ export async function selectProject(
     // Return project selection with 'use-default' option and defaultProject
     return {
         option: 'use-default',
-        defaultProject: {
-            orgId: (selected as ProjectResponse).org_id,
-            projectId: (selected as ProjectResponse).project_id,
-            displayName: formatProjectName(selected as ProjectResponse),
-        }
+        defaultProject: toProject(selected as ProjectResponse),
     }
 }
 
-export async function promptForProjectIfNeeded(): Promise<ProjectResponse | null> {
+function toProject(projectResponse: ProjectResponse): PropelAuthProject {
+    return {
+        orgId: projectResponse.org_id,
+        projectId: projectResponse.project_id,
+        displayName: formatProjectName(projectResponse),
+    }
+}
+
+export async function promptForProjectIfNeeded(): Promise<PropelAuthProject | null> {
     const config = await getConfig()
     const s = spinner()
-    
+
     if (!config || !config.apiKey) {
         outro(pc.red('Please login first using the login command'))
         process.exit(1)
     }
-    
-    if (config.projectSelection.option === 'use-default') {
-        // If project selection is set to use-default, return null to indicate no need to prompt
-        return null
+
+    if (!config.projectSelection) {
+        outro(pc.red('Please login first using the login command'))
+        process.exit(1)
+    } else if (config.projectSelection.option === 'use-default') {
+        return config.projectSelection.defaultProject
     }
-    
+
     // If project selection is always-ask, fetch projects and prompt the user
     s.start('Fetching your projects')
     const result = await fetchProjects(config.apiKey)
-    
+
     if (!result.success) {
         s.stop('Failed to fetch projects')
         if (result.error === 'unauthorized') {
@@ -162,35 +169,34 @@ export async function promptForProjectIfNeeded(): Promise<ProjectResponse | null
         }
         process.exit(1)
     }
-    
+
     s.stop('Projects fetched successfully')
-    
+
     if (result.data.projects.length === 0) {
         outro(pc.yellow('No projects available to select'))
         process.exit(1)
-        return null
     }
-    
+
     // Sort projects alphabetically by org/name
     const sortedProjects = [...result.data.projects].sort((a, b) => {
         const aName = `${a.org_name} / ${a.name}`.toLowerCase()
         const bName = `${b.org_name} / ${b.name}`.toLowerCase()
         return aName.localeCompare(bName)
     })
-    
-    const selected: symbol | ProjectResponse = await select({
+
+    const selected: symbol | PropelAuthProject = await select({
         message: 'Select a project to use for this command',
         options: sortedProjects.map((project) => ({
-            value: project,
+            value: toProject(project),
             label: `${project.org_name} / ${project.name}`,
         })),
-        initialValue: sortedProjects[0],
+        initialValue: toProject(sortedProjects[0]),
     })
-    
+
     if (isCancel(selected)) {
         outro(pc.red('Project selection cancelled'))
         process.exit(0)
     }
-    
-    return selected as ProjectResponse
+
+    return selected
 }
