@@ -1,3 +1,4 @@
+import { intro, outro } from '@clack/prompts'
 import fs from 'fs/promises'
 import pc from 'picocolors'
 
@@ -9,7 +10,7 @@ type Spinner = {
 export type RequiredVarConfig = {
     description: string
     required: boolean
-    default?: string
+    value?: string
 }
 
 export async function parseEnvFile(envPath: string): Promise<Map<string, string>> {
@@ -33,13 +34,7 @@ export async function parseEnvFile(envPath: string): Promise<Map<string, string>
     }
 }
 
-export async function updateEnvFile(
-    envPath: string,
-    requiredVars: Record<string, RequiredVarConfig>,
-    spinner?: Spinner
-): Promise<void> {
-    const s = spinner || { start: () => {}, stop: () => {} }
-
+export async function updateEnvFile(envPath: string, requiredVars: Record<string, RequiredVarConfig>): Promise<void> {
     const existingEnv = await parseEnvFile(envPath)
     let fileContent = ''
 
@@ -59,15 +54,15 @@ export async function updateEnvFile(
                 updatedContent += '\n'
             }
             updatedContent += `# ${config.description}\n`
-            updatedContent += `${key}=${config.default || ''}\n`
+            updatedContent += `${key}=${config.value || ''}\n`
         }
     }
 
     if (missingVars.length > 0) {
-        s.start(`Updating environment variables`)
+        intro(`Updating environment variables`)
         await fs.writeFile(envPath, updatedContent)
-        s.stop(`Updated ${pc.cyan(envPath)} with ${missingVars.length} new variables`)
+        outro(`Updated ${pc.cyan(envPath)} with ${missingVars.length} new variables`)
     } else {
-        s.stop(`${pc.cyan(envPath)} is already configured`)
+        outro(`${pc.cyan(envPath)} is already configured`)
     }
 }

@@ -1,13 +1,18 @@
 import fs from 'fs/promises'
 import path from 'path'
 import pc from 'picocolors'
-import { confirm, text } from '@clack/prompts'
+import { confirm, outro, text } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 import { readPackageJson } from '../lang/javascriptUtils.js'
 import { updateEnvFile } from '../envUtils.js'
 import { getApiKey, PropelAuthProject } from '../projectUtils.js'
 import { TestEnv } from '../../types/api.js'
-import { fetchBackendIntegration, fetchFrontendIntegration, updateFrontendIntegration, createApiKey } from '../../api.js'
+import {
+    fetchBackendIntegration,
+    fetchFrontendIntegration,
+    updateFrontendIntegration,
+    createApiKey,
+} from '../../api.js'
 
 type Spinner = {
     start: (msg?: string) => void
@@ -38,7 +43,6 @@ export const NEXTJS_REQUIRED_ENV_VARS = {
 export async function getPort(targetPath: string): Promise<number> {
     // Check if the project has a custom port defined
     try {
-        const packageJsonPath = path.join(targetPath, 'package.json')
         const packageJson = await readPackageJson(targetPath)
 
         // Check for dev script with a port flag
@@ -57,7 +61,7 @@ export async function getPort(targetPath: string): Promise<number> {
 export async function parseEnvVars(envContent: string): Promise<Record<string, string>> {
     const envVars: Record<string, string> = {}
     const envLines = envContent.split('\n')
-    
+
     for (const line of envLines) {
         const parts = line.split('=')
         if (parts.length >= 2) {
@@ -66,7 +70,7 @@ export async function parseEnvVars(envContent: string): Promise<Record<string, s
             envVars[key] = value
         }
     }
-    
+
     return envVars
 }
 
@@ -147,9 +151,7 @@ export async function configureNextJsEnvironmentVariables(
             apiKeyValue = createKeyResult.data.api_key
             s.stop('✓ Created new API key')
         } else {
-            console.log(
-                pc.yellow('⚠ No API key generated. You will need to fill in the PROPELAUTH_API_KEY value manually.')
-            )
+            outro(pc.yellow('⚠ No API key generated. You will need to fill in the PROPELAUTH_API_KEY value manually.'))
         }
     }
 
@@ -157,29 +159,33 @@ export async function configureNextJsEnvironmentVariables(
         NEXT_PUBLIC_AUTH_URL: {
             description: 'Your Auth URL',
             required: true,
-            default: auth_url_origin,
+            value: auth_url_origin,
         },
         PROPELAUTH_API_KEY: {
             description: 'Your API key for PropelAuth',
             required: true,
-            default: apiKeyValue,
+            value: apiKeyValue,
         },
         PROPELAUTH_VERIFIER_KEY: {
             description: 'Verifier Key from the dashboard',
             required: true,
-            default: verifier_key,
+            value: formatVerifierKey(verifier_key),
         },
         PROPELAUTH_REDIRECT_URI: {
             description: 'Redirect URI for authentication callbacks',
             required: true,
-            default: 'http://localhost:3000/api/auth/callback',
+            value: 'http://localhost:3000/api/auth/callback',
         },
     }
 
     s.stop('✓ Fetched integration details')
 
     // Update the env file with the fetched values
-    await updateEnvFile(envPath, customEnvVars, s)
+    await updateEnvFile(envPath, customEnvVars)
+}
+
+function formatVerifierKey(verifierKey: string): string {
+    return verifierKey.replace(/\n/g, '\\n')
 }
 
 export async function configureNextJsRedirectPaths(
@@ -258,17 +264,12 @@ export async function configureNextJsRedirectPaths(
             port,
         }
 
-        const updateResult = await updateFrontendIntegration(
-            apiKey,
-            selectedProject.orgId,
-            selectedProject.projectId,
-            {
-                test_env: testEnv,
-                login_redirect_path: loginRedirectPath,
-                logout_redirect_path: logoutRedirectPath,
-                allowed_urls: currentSettings.allowed_urls,
-            }
-        )
+        const updateResult = await updateFrontendIntegration(apiKey, selectedProject.orgId, selectedProject.projectId, {
+            test_env: testEnv,
+            login_redirect_path: loginRedirectPath,
+            logout_redirect_path: logoutRedirectPath,
+            allowed_urls: currentSettings.allowed_urls,
+        })
 
         if (!updateResult.success) {
             s.stop('Failed to update frontend integration settings')
