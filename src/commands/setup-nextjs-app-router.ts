@@ -161,6 +161,40 @@ This is a quick overview of the steps:
 2. Added middleware at ${pc.cyan(path.relative(targetPath, middlewareFilePath))}
 3. Created/updated environment variables in ${pc.cyan('.env.local')}
 4. Configured PropelAuth redirect paths for localhost:${port}`)
+
+        // Show example usage code snippets
+        log.info(`
+${pc.cyan('Example Usage:')}
+${pc.dim('─────────────────────────────────────────────')}
+
+${pc.bold('Server Component Example:')}
+${pc.green(`import { getUserOrRedirect } from "@propelauth/nextjs/server/app-router";
+
+const WelcomeMessage = async () => {
+    const user = await getUserOrRedirect()
+    return <div>Welcome, {user.email}!</div>
+}`)}
+
+${pc.bold('Client Component Example:')}
+${pc.green(`"use client";
+
+import { useUser } from "@propelauth/nextjs/client";
+
+const WelcomeMessage = () => {
+    const {loading, user} = useUser()
+    if (loading) {
+        return <div>Loading...</div>
+    } else if (user) {
+        return <div>Welcome, {user.email}!</div>
+    } else {
+        return <div>Please log in to be welcomed</div>
+    }
+}`)}
+${pc.dim('─────────────────────────────────────────────')}
+
+${pc.cyan('For full documentation and more examples, visit:')}
+${pc.underline('https://docs.propelauth.com/reference/fullstack-apis/nextjsapp/installation-and-setup')}`
+        )
         outro(pc.green('PropelAuth has been successfully set up in your Next.js project!'))
         process.exit(0)
     } catch (error) {
