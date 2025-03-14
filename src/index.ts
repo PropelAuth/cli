@@ -2,6 +2,7 @@
 
 import { Command } from 'commander'
 import setupNextJsAppRouter from './commands/setup-nextjs-app-router.js'
+import setupNextJsPagesRouter from './commands/setup-nextjs-pages-router.js'
 import login from './commands/login.js'
 import setDefaultProject from './commands/set-default-project.js'
 import { resolvePath } from './helpers/fileUtils.js'
@@ -17,6 +18,15 @@ program
     .action(async (directory: string | undefined) => {
         const resolvedPath = resolvePath(directory)
         await setupNextJsAppRouter(resolvedPath)
+    })
+
+program
+    .command('setup-nextjs-pages-router')
+    .description('Set up PropelAuth authentication in a Next.js Pages Router project')
+    .argument('[directory]', 'Target directory (defaults to current directory)')
+    .action(async (directory: string | undefined) => {
+        const resolvedPath = resolvePath(directory)
+        await setupNextJsPagesRouter(resolvedPath)
     })
 
 program
