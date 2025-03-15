@@ -59,10 +59,6 @@ export async function updateEnvFile(envPath: string, requiredVars: Record<string
     }
 
     if (missingVars.length > 0) {
-        intro(`Updating environment variables`)
         await fs.writeFile(envPath, updatedContent)
-        outro(`Updated ${pc.cyan(envPath)} with ${missingVars.length} new variables`)
-    } else {
-        outro(`${pc.cyan(envPath)} is already configured`)
     }
 }

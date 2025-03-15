@@ -28,9 +28,7 @@ export function resolvePath(inputPath: string | undefined): string {
 
 export async function ensureDirectory(dirPath: string, spinner?: Spinner): Promise<void> {
     const s = spinner || { start: () => {}, stop: () => {} }
-    s.start(`Ensuring directory: ${pc.cyan(dirPath)}`)
     await fs.mkdir(dirPath, { recursive: true })
-    s.stop(`Directory ensured: ${pc.cyan(dirPath)}`)
 }
 
 export async function readFileSafe(filePath: string): Promise<string | null> {
@@ -69,9 +67,14 @@ export async function overwriteFileWithConfirmation(
     }
 
     if (showDiff) {
-        const patch = createTwoFilesPatch(path.basename(filePath), path.basename(filePath), existingContent, newContent)
+        // Import showLayoutChangeDiff function
+        const { showLayoutChangeDiff } = await import('./showLayoutChangeDiff.js')
         log.info(pc.magenta('--- DIFF ---------------------------------------------------------'))
-        log.info(patch)
+        showLayoutChangeDiff(
+            (msg) => log.info(msg),
+            existingContent,
+            newContent
+        )
         log.info(pc.magenta('------------------------------------------------------------------'))
     }
 

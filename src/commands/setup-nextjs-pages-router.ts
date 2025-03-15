@@ -9,6 +9,7 @@ import {
     getPort,
     configureNextJsEnvironmentVariables,
     configureNextJsRedirectPaths,
+    updatePagesRouterApp,
 } from '../helpers/framework/nextJsUtils.js'
 import { promptForJsInstall } from '../helpers/lang/javascriptUtils.js'
 import { loadTemplateResource } from '../helpers/templateUtils.js'
@@ -22,15 +23,7 @@ type Spinner = {
 export default async function setupNextJsPagesRouter(targetDir: string): Promise<void> {
     intro(pc.cyan('⚡ Setting up authentication in Next.js project'))
 
-    log.info(`${pc.cyan('Welcome!')} We are going to set up your Next.js Pages Router project with PropelAuth authentication.
-
-This is a quick overview of the steps:
-1. Select the PropelAuth project to tie this Next.js application to
-2. Configure environment variables in .env.local
-3. Configure redirect paths in PropelAuth dashboard
-4. Install required dependencies (@propelauth/nextjs)
-5. Set up auth API route handlers
-6. Update your pages`)
+    log.info(`${pc.cyan('Welcome!')} We'll set up PropelAuth authentication in your Next.js Pages Router project.`)
 
     const shouldProceed = await confirm({
         message: 'Ready to get started?',
@@ -71,18 +64,18 @@ This is a quick overview of the steps:
         const port = await getPort(targetPath)
 
         // Configure environment variables with values from the PropelAuth API
-        intro(pc.cyan('Setting up environment variables'))
+        log.info(pc.cyan('Setting up environment variables'))
         const envPath = path.join(targetPath, '.env.local')
         await configureNextJsEnvironmentVariables(envPath, selectedProject, s)
 
         // Configure redirect paths in PropelAuth dashboard
-        intro(pc.cyan('Configuring PropelAuth redirect paths'))
+        log.info(pc.cyan('Configuring redirect paths'))
         await configureNextJsRedirectPaths(selectedProject, s, port)
 
-        intro(pc.cyan('Installing dependencies'))
+        log.info(pc.cyan('Installing dependencies'))
         await promptForJsInstall(targetPath, s, '@propelauth/nextjs')
 
-        intro(pc.cyan('Creating authentication routes'))
+        log.info(pc.cyan('Creating authentication routes'))
         s.start('Setting up API route handlers')
         
         // Create app directory if needed
@@ -92,7 +85,6 @@ This is a quick overview of the steps:
         // Set up auth API routes in app directory
         const authApiDir = path.join(appRouterDir, 'api', 'auth', '[slug]')
         await ensureDirectory(authApiDir, s)
-        s.stop(`✓ Created API directory at ${pc.cyan(path.relative(targetPath, authApiDir))}`)
 
         let routeContent = await loadTemplateResource('nextjs', 'route.ts')
         const nextMajor = parseInt((nextVersion || '15').split('.')[0], 10)
@@ -104,18 +96,22 @@ This is a quick overview of the steps:
         }
 
         const routeFilePath = path.join(authApiDir, 'route.ts')
-        intro(`Creating route handler at ${pc.cyan(path.relative(targetPath, routeFilePath))}`)
         await overwriteFileWithConfirmation(routeFilePath, routeContent, 'Auth route.ts', s)
-        outro(`✓ Created route handler at ${pc.cyan(path.relative(targetPath, routeFilePath))}`)
+        s.stop(`✓ Created authentication routes`)
 
-        intro(pc.cyan('Configuring _app.tsx'))
+        log.info(pc.cyan('Configuring _app.tsx'))
         const appPath = path.join(pagesRouterDir, '_app.tsx')
         s.start('Checking _app.tsx configuration')
         try {
             await (await import('fs')).promises.stat(appPath)
             s.stop('✓ Found _app.tsx at ' + pc.cyan(path.relative(targetPath, appPath)))
 
-            log.info(`${pc.cyan('_app.tsx Changes Required:')}
+            // Try to automatically update the _app.tsx file
+            const autoUpdateSuccess = await updatePagesRouterApp(appPath, s)
+            
+            if (!autoUpdateSuccess) {
+                // Fall back to manual instructions if automatic update fails
+                log.info(`${pc.cyan('_app.tsx Changes Required:')}
 
 1. Add this import at the top of ${pc.cyan(appPath)}:
    ${pc.green('import { AuthProvider } from "@propelauth/nextjs/client";')}
@@ -136,30 +132,25 @@ This is a quick overview of the steps:
    ${pc.yellow('  )')}
    ${pc.yellow('}')}`)
 
-            const answer = await confirm({
-                message: 'Have you made these changes to your _app.tsx?',
-                active: pc.green('yes'),
-                inactive: pc.yellow('no'),
-                initialValue: false,
-            })
-            if (isCancel(answer)) {
-                outro(pc.red('Setup cancelled'))
-                process.exit(0)
-            }
-            if (!answer) {
-                outro(pc.yellow('⚠ Please make the required changes to your _app.tsx.'))
+                const answer = await confirm({
+                    message: 'Have you made these changes to your _app.tsx?',
+                    active: pc.green('yes'),
+                    inactive: pc.yellow('no'),
+                    initialValue: false,
+                })
+                if (isCancel(answer)) {
+                    outro(pc.red('Setup cancelled'))
+                    process.exit(0)
+                }
+                if (!answer) {
+                    outro(pc.yellow('⚠ Please make the required changes to your _app.tsx.'))
+                }
             }
         } catch (err) {
             s.stop(pc.yellow('⚠ No _app.tsx found; skipping instructions for AuthProvider setup.'))
         }
 
         log.success('✓ PropelAuth setup completed!')
-
-        log.info(`Summary of changes:
-
-1. Added authentication API routes at ${pc.cyan(`${path.relative(targetPath, authApiDir)}/route.ts`)}
-2. Created/updated environment variables in ${pc.cyan('.env.local')}
-3. Configured PropelAuth redirect paths for localhost:${port}`)
 
         // Show example usage code snippets
         log.info(`

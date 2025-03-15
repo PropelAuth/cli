@@ -7,6 +7,8 @@ import { readPackageJson } from '../lang/javascriptUtils.js'
 import { updateEnvFile } from '../envUtils.js'
 import { getApiKey, PropelAuthProject } from '../projectUtils.js'
 import { TestEnv } from '../../types/api.js'
+import { overwriteFileWithConfirmation } from '../fileUtils.js'
+import { Project, SyntaxKind, JsxElement, JsxSelfClosingElement } from 'ts-morph'
 import {
     fetchBackendIntegration,
     fetchFrontendIntegration,
@@ -178,8 +180,6 @@ export async function configureNextJsEnvironmentVariables(
         },
     }
 
-    s.stop('✓ Fetched integration details')
-
     // Update the env file with the fetched values
     await updateEnvFile(envPath, customEnvVars)
 }
@@ -237,10 +237,7 @@ export async function configureNextJsRedirectPaths(
     }
 
     if (needsUpdate) {
-        s.stop('Current settings need updating')
-        
-        // Use log.info for consistent formatting
-        log.info(pc.cyan('The following settings will be updated:') + updateMessage)
+        s.stop('Settings need updating')
 
         const confirmUpdate = await confirm({
             message: 'Would you like to update these settings?',
@@ -280,6 +277,310 @@ export async function configureNextJsRedirectPaths(
         s.stop('✓ Updated frontend integration settings')
     } else {
         s.stop('✓ Frontend integration settings are already configured correctly')
+    }
+}
+
+/**
+ * Attempts to automatically modify a Next.js App Router layout.tsx file 
+ * to add the AuthProvider wrapper around the children.
+ */
+export async function updateAppRouterLayout(
+    layoutPath: string, 
+    s: Spinner
+): Promise<boolean> {
+    s.start(`Analyzing layout file at ${pc.cyan(layoutPath)}`)
+    
+    try {
+        // Initialize ts-morph project with manipulations format settings
+        const project = new Project({
+            manipulationSettings: {
+                indentationText: "  " as any, // Two spaces for indentation
+                useTrailingCommas: true,
+                insertSpaceAfterOpeningAndBeforeClosingNonemptyBraces: true,
+            }
+        })
+        const sourceFile = project.addSourceFileAtPath(layoutPath)
+        
+        // Check if AuthProvider is already imported
+        let hasAuthProviderImport = false
+        sourceFile.getImportDeclarations().forEach(importDecl => {
+            if (importDecl.getModuleSpecifierValue() === '@propelauth/nextjs/client' &&
+                importDecl.getNamedImports().some(named => named.getName() === 'AuthProvider')) {
+                hasAuthProviderImport = true
+            }
+        })
+        
+        // Add import if not present
+        if (!hasAuthProviderImport) {
+            sourceFile.addImportDeclaration({
+                moduleSpecifier: '@propelauth/nextjs/client',
+                namedImports: ['AuthProvider']
+            })
+        }
+        
+        // Find the body tag containing children
+        let modified = false
+        let bodyElement: JsxElement | undefined
+        
+        // Find all JSX elements with tag name 'body'
+        sourceFile.forEachDescendant(node => {
+            if (node.getKind() === SyntaxKind.JsxOpeningElement) {
+                const tagName = node.getFirstChildByKind(SyntaxKind.Identifier)
+                if (tagName && tagName.getText() === 'body') {
+                    bodyElement = node.getParent() as JsxElement
+                }
+            }
+        })
+        
+        if (bodyElement) {
+            // Check if children is already wrapped in AuthProvider
+            let hasAuthProvider = false
+            bodyElement.forEachDescendant(node => {
+                if (node.getKind() === SyntaxKind.JsxOpeningElement) {
+                    const tagName = node.getFirstChildByKind(SyntaxKind.Identifier)
+                    if (tagName && tagName.getText() === 'AuthProvider') {
+                        hasAuthProvider = true
+                    }
+                }
+            })
+            
+            if (!hasAuthProvider) {
+                // Get the body element's children
+                const children = bodyElement.getJsxChildren()
+                
+                // Analyze the body's structure to find the best place to add the AuthProvider
+                const bodyText = bodyElement.getText()
+                const matchResult = bodyText.match(/<[^>]+>/g)
+                const hasComplexStructure = bodyText.includes('<') && bodyText.includes('>') && 
+                    matchResult && matchResult.length > 2
+                
+                if (hasComplexStructure) {
+                    // The body has complex structure, likely with existing providers
+                    // Find the innermost content that contains 'children'
+                    let innermostChildrenContainer: any = null
+                    let deepestLevel = -1
+                    
+                    const findInnermostChildren = (node: any, level: number) => {
+                        if (node.getKind() === SyntaxKind.JsxExpression) {
+                            const expression = node.getFirstDescendantByKind(SyntaxKind.Identifier)
+                            if (expression && expression.getText() === 'children' && level > deepestLevel) {
+                                innermostChildrenContainer = node
+                                deepestLevel = level
+                            }
+                        }
+                        node.forEachChild((child: any) => findInnermostChildren(child, level + 1))
+                    }
+                    
+                    bodyElement.forEachChild((child: any) => findInnermostChildren(child, 0))
+                    
+                    if (innermostChildrenContainer) {
+                        // Found the innermost {children} expression, wrap it with a proper JSX structure
+                        const childrenIdentifier = innermostChildrenContainer.getFirstDescendantByKind(SyntaxKind.Identifier)
+                        
+                        // Create a wrapper around children using proper structure
+                        innermostChildrenContainer.replaceWithText(`<AuthProvider authUrl={process.env.NEXT_PUBLIC_AUTH_URL!}>{children}</AuthProvider>`)
+                        modified = true
+                    } else {
+                        // No {children} found, which is odd but possible
+                        s.stop(pc.yellow(`⚠ Could not locate children in the body element`))
+                        return false
+                    }
+                } else {
+                    // Find the children expression and replace it with AuthProvider
+                    for (let i = 0; i < children.length; i++) {
+                        const child = children[i]
+                        if (child.getKind() === SyntaxKind.JsxExpression) {
+                            const childText = child.getText()
+                            if (childText.includes('children')) {
+                                // Create a proper JSX structure that will be auto-formatted
+                                child.replaceWithText(`<AuthProvider authUrl={process.env.NEXT_PUBLIC_AUTH_URL!}>{children}</AuthProvider>`)
+                                modified = true
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (modified) {
+            // Get the modified source text
+            const updatedCode = sourceFile.getFullText()
+            
+            // Show diff and confirm changes
+            await overwriteFileWithConfirmation(
+                layoutPath,
+                updatedCode,
+                'Root layout with AuthProvider',
+                s,
+                true
+            )
+            s.stop(`✓ Updated layout.tsx with AuthProvider`)
+            return true
+        } else if (hasAuthProviderImport && bodyElement) {
+            s.stop(`✓ Layout file already appears to have AuthProvider`)
+            return true
+        } else {
+            s.stop(pc.yellow(`⚠ Could not automatically update layout file - structure not recognized`))
+            return false
+        }
+    } catch (error) {
+        s.stop(pc.yellow(`⚠ Error updating layout file: ${error}`))
+        return false
+    }
+}
+
+/**
+ * Attempts to automatically modify a Next.js Pages Router _app.tsx file
+ * to add the AuthProvider wrapper around the Component.
+ */
+export async function updatePagesRouterApp(
+    appPath: string, 
+    s: Spinner
+): Promise<boolean> {
+    s.start(`Analyzing _app.tsx file at ${pc.cyan(appPath)}`)
+    
+    try {
+        // Initialize ts-morph project with manipulations format settings
+        const project = new Project({
+            manipulationSettings: {
+                indentationText: "  " as any, // Two spaces for indentation
+                useTrailingCommas: true,
+                insertSpaceAfterOpeningAndBeforeClosingNonemptyBraces: true,
+            }
+        })
+        const sourceFile = project.addSourceFileAtPath(appPath)
+        
+        // Check if AuthProvider is already imported
+        let hasAuthProviderImport = false
+        sourceFile.getImportDeclarations().forEach(importDecl => {
+            if (importDecl.getModuleSpecifierValue() === '@propelauth/nextjs/client' &&
+                importDecl.getNamedImports().some(named => named.getName() === 'AuthProvider')) {
+                hasAuthProviderImport = true
+            }
+        })
+        
+        // Add import if not present
+        if (!hasAuthProviderImport) {
+            sourceFile.addImportDeclaration({
+                moduleSpecifier: '@propelauth/nextjs/client',
+                namedImports: ['AuthProvider']
+            })
+        }
+        
+        // Find the App component's return statement
+        let modified = false
+        const appFunctions = sourceFile.getFunctions().filter(f => 
+            f.getName() === 'App' || 
+            f.getFirstDescendantByKind(SyntaxKind.ExportKeyword)
+        )
+        
+        if (appFunctions.length > 0) {
+            const appFunction = appFunctions[0]
+            const returnStatement = appFunction.getFirstDescendantByKind(SyntaxKind.ReturnStatement)
+            
+            if (returnStatement) {
+                // Check if Component is already wrapped in AuthProvider
+                let hasAuthProvider = false
+                returnStatement.forEachDescendant(node => {
+                    if (node.getKind() === SyntaxKind.JsxOpeningElement) {
+                        const tagName = node.getFirstChildByKind(SyntaxKind.Identifier)
+                        if (tagName && tagName.getText() === 'AuthProvider') {
+                            hasAuthProvider = true
+                        }
+                    }
+                })
+                
+                if (!hasAuthProvider) {
+                    // Check if return statement has complex structure (likely has other providers)
+                    const returnContent = returnStatement.getText().trim()
+                    const matchResult = returnContent.match(/<[^>]+>/g)
+                    const hasComplexStructure = returnContent.includes('Provider') || 
+                        (returnContent.includes('<') && returnContent.includes('>') && 
+                         matchResult && matchResult.length > 2)
+                    
+                    if (hasComplexStructure) {
+                        // Find the innermost Component reference
+                        let innermostComponent: any = null
+                        let deepestLevel = -1
+                        
+                        const findInnermostComponent = (node: any, level: number) => {
+                            if ((node.getKind() === SyntaxKind.JsxSelfClosingElement || 
+                                 node.getKind() === SyntaxKind.JsxOpeningElement)) {
+                                const tagName = node.getFirstChildByKind(SyntaxKind.Identifier)
+                                if (tagName && tagName.getText() === 'Component' && level > deepestLevel) {
+                                    innermostComponent = node.getKind() === SyntaxKind.JsxSelfClosingElement ? 
+                                        node : node.getParent()
+                                    deepestLevel = level
+                                }
+                            }
+                            node.forEachChild((child: any) => findInnermostComponent(child, level + 1))
+                        }
+                        
+                        returnStatement.forEachChild((child: any) => findInnermostComponent(child, 0))
+                        
+                        if (innermostComponent) {
+                            // Found the innermost Component, wrap it with proper structure
+                            // Use the inherent JSX structure to let ts-morph handle indentation
+                            innermostComponent.replaceWithText(`<AuthProvider authUrl={process.env.NEXT_PUBLIC_AUTH_URL!}>${innermostComponent.getText()}</AuthProvider>`)
+                            modified = true
+                        } else {
+                            s.stop(pc.yellow(`⚠ Could not locate Component in the return statement`))
+                            return false
+                        }
+                    } else {
+                        // Simple structure, use the original approach
+                        // Find Component JSX element
+                        let componentElement: JsxElement | JsxSelfClosingElement | undefined
+                        
+                        returnStatement.forEachDescendant(node => {
+                            if (node.getKind() === SyntaxKind.JsxSelfClosingElement) {
+                                const tagName = node.getFirstChildByKind(SyntaxKind.Identifier)
+                                if (tagName && tagName.getText() === 'Component') {
+                                    componentElement = node as JsxSelfClosingElement
+                                }
+                            } else if (node.getKind() === SyntaxKind.JsxOpeningElement) {
+                                const tagName = node.getFirstChildByKind(SyntaxKind.Identifier)
+                                if (tagName && tagName.getText() === 'Component') {
+                                    componentElement = node.getParent() as JsxElement
+                                }
+                            }
+                        })
+                        
+                        if (componentElement) {
+                            // Use expression structure to let ts-morph handle indentation
+                            componentElement.replaceWithText(`<AuthProvider authUrl={process.env.NEXT_PUBLIC_AUTH_URL!}>${componentElement.getText()}</AuthProvider>`)
+                            modified = true
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (modified) {
+            // Get the modified source text
+            const updatedCode = sourceFile.getFullText()
+            
+            // Show diff and confirm changes
+            await overwriteFileWithConfirmation(
+                appPath,
+                updatedCode,
+                '_app.tsx with AuthProvider',
+                s,
+                true
+            )
+            s.stop(`✓ Updated _app.tsx with AuthProvider`)
+            return true
+        } else if (hasAuthProviderImport && appFunctions.length > 0) {
+            s.stop(`✓ _app.tsx file already appears to have AuthProvider`)
+            return true
+        } else {
+            s.stop(pc.yellow(`⚠ Could not automatically update _app.tsx file - structure not recognized`))
+            return false
+        }
+    } catch (error) {
+        s.stop(pc.yellow(`⚠ Error updating _app.tsx file: ${error}`))
+        return false
     }
 }
 
@@ -337,10 +638,8 @@ export async function validateNextJsProject(
 
     s.stop('Found project details')
     
-    // Use log.info with consistent formatting
-    log.info(`Detected Next.js ${pc.green(nextVersion || '(unknown)')}
-App Router: ${appRouterDir ? pc.cyan(path.relative(targetPath, appRouterDir)) : pc.yellow('not found')}
-Pages Router: ${pagesRouterDir ? pc.cyan(path.relative(targetPath, pagesRouterDir)) : pc.yellow('not found')}`)
+    // Use simplified log output
+    log.info(`Detected Next.js ${pc.green(nextVersion || '(unknown)')}`)
 
     return {
         nextVersion,

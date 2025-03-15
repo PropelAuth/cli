@@ -6,6 +6,19 @@ export function showLayoutChangeDiff(
     beforeSnippet: string,
     afterSnippet: string
 ): void {
-    const patch = createTwoFilesPatch('before', 'after', beforeSnippet.trim(), afterSnippet.trim(), '', '')
-    printer(pc.magenta(patch))
+    const patch = createTwoFilesPatch('layout.tsx', 'layout.tsx', beforeSnippet.trim(), afterSnippet.trim(), '', '')
+    
+    // Format the diff with colors
+    const formattedPatch = patch
+        .split('\n')
+        .map(line => {
+            if (line.startsWith('+')) return pc.green(line)
+            if (line.startsWith('-')) return pc.red(line)
+            if (line.startsWith('@')) return pc.cyan(line)
+            if (line.startsWith('Index:') || line.startsWith('===')) return pc.magenta(line)
+            return line
+        })
+        .join('\n')
+    
+    printer(formattedPatch)
 }

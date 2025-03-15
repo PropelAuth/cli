@@ -29,6 +29,7 @@
         "dotenv": "^16.4.5",
         "is-unicode-supported": "^2.0.0",
         "picocolors": "^1.0.1",
+        "ts-morph": "^25.0.1",
         "untildify": "^5.0.0"
     },
     "devDependencies": {
