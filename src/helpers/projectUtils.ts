@@ -2,7 +2,7 @@ import path from 'path'
 import os from 'os'
 import fs from 'fs/promises'
 import pc from 'picocolors'
-import { select, outro, spinner } from '@clack/prompts'
+import { select, outro, spinner, log } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 import { ProjectResponse, TestEnv } from '../types/api.js'
 import { fetchProjects } from '../api.js'
@@ -142,7 +142,6 @@ function toProject(projectResponse: ProjectResponse): PropelAuthProject {
 
 export async function promptForProjectIfNeeded(): Promise<PropelAuthProject | null> {
     const config = await getConfig()
-    const s = spinner()
 
     if (!config || !config.apiKey) {
         outro(pc.red('Please login first using the login command'))
@@ -153,15 +152,14 @@ export async function promptForProjectIfNeeded(): Promise<PropelAuthProject | nu
         outro(pc.red('Please login first using the login command'))
         process.exit(1)
     } else if (config.projectSelection.option === 'use-default') {
+        log.success(`✓ Using default project: ${pc.cyan(config.projectSelection.defaultProject.displayName)}`)
         return config.projectSelection.defaultProject
     }
 
     // If project selection is always-ask, fetch projects and prompt the user
-    s.start('Fetching your projects')
     const result = await fetchProjects(config.apiKey)
 
     if (!result.success) {
-        s.stop('Failed to fetch projects')
         if (result.error === 'unauthorized') {
             outro(pc.red('Your API key appears to be invalid. Please login again.'))
         } else {
@@ -169,8 +167,6 @@ export async function promptForProjectIfNeeded(): Promise<PropelAuthProject | nu
         }
         process.exit(1)
     }
-
-    s.stop('Projects fetched successfully')
 
     if (result.data.projects.length === 0) {
         outro(pc.yellow('No projects available to select'))

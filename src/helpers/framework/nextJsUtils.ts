@@ -57,7 +57,26 @@ export async function getPort(targetPath: string): Promise<number> {
         // Ignore errors, just use the default port
     }
 
-    return 3000 // Default Next.js port
+    // If no port was found automatically, prompt the user to enter one
+    const userPort = await text({
+        message: 'Enter the port your Next.js app runs on:',
+        initialValue: '3000', // Default Next.js port
+    })
+
+    if (isCancel(userPort)) {
+        throw new Error('Port selection cancelled')
+    }
+
+    // Parse the user input as a number
+    const port = parseInt(userPort.toString(), 10)
+
+    // Validate that the input is a valid port number
+    if (isNaN(port) || port < 1 || port > 65535) {
+        log.warn('Invalid port number. Using default port 3000.')
+        return 3000
+    }
+
+    return port
 }
 
 export async function parseEnvVars(envContent: string): Promise<Record<string, string>> {
@@ -81,20 +100,16 @@ export async function configureNextJsEnvironmentVariables(
     selectedProject: PropelAuthProject,
     s: Spinner
 ): Promise<void> {
-    s.start('Fetching project configuration from PropelAuth')
-
     const apiKey = await getApiKey()
     if (!apiKey) {
-        s.stop('Failed to get API key')
-        throw new Error('API key not found. Please login first.')
+        outro('API key not found. Please login first.')
+        process.exit(1)
     }
 
-    // Fetch backend integration details
     const beResult = await fetchBackendIntegration(apiKey, selectedProject.orgId, selectedProject.projectId)
-
     if (!beResult.success) {
-        s.stop('Failed to fetch backend integration details')
-        throw new Error(`Could not fetch backend details: ${beResult.error}`)
+        outro(`Could not fetch backend details: ${beResult.error}`)
+        process.exit(1)
     }
 
     // Set environment variables with fetched values
@@ -118,7 +133,7 @@ export async function configureNextJsEnvironmentVariables(
 
     // If API key is not already set, ask if they want to generate one
     if (!apiKeyValue) {
-        s.stop('No API key found in environment file')
+        log.info('No API key found in environment file')
         const createNew = await confirm({
             message: 'Would you like to generate a new API key for this project?',
             active: pc.green('yes'),
@@ -146,8 +161,8 @@ export async function configureNextJsEnvironmentVariables(
             })
 
             if (!createKeyResult.success) {
-                s.stop('Failed to create new API key')
-                throw new Error(`Could not create API key: ${createKeyResult.error}`)
+                outro(`Could not create API key: ${createKeyResult.error}`)
+                process.exit(1)
             }
 
             apiKeyValue = createKeyResult.data.api_key
@@ -193,20 +208,17 @@ export async function configureNextJsRedirectPaths(
     s: Spinner,
     port: number = 3000
 ): Promise<void> {
-    s.start('Configuring redirect paths')
-
     const apiKey = await getApiKey()
     if (!apiKey) {
-        s.stop('Failed to get API key')
-        throw new Error('API key not found. Please login first.')
+        outro('API key not found. Please login first.')
+        process.exit(1)
     }
 
     // Fetch current frontend integration details
     const feResult = await fetchFrontendIntegration(apiKey, selectedProject.orgId, selectedProject.projectId)
-
     if (!feResult.success) {
-        s.stop('Failed to fetch frontend integration details')
-        throw new Error(`Could not fetch frontend details: ${feResult.error}`)
+        outro(`Could not fetch frontend details: ${feResult.error}`)
+        process.exit(1)
     }
 
     const currentSettings = feResult.data.test
@@ -237,10 +249,9 @@ export async function configureNextJsRedirectPaths(
     }
 
     if (needsUpdate) {
-        s.stop('Settings need updating')
-
         const confirmUpdate = await confirm({
-            message: 'Would you like to update these settings?',
+            message:
+                "Your test environment isn't configured for Next.js with the port you specified. Would you like us to update your config?",
             active: pc.green('yes'),
             inactive: pc.yellow('no'),
         })
@@ -271,12 +282,13 @@ export async function configureNextJsRedirectPaths(
 
         if (!updateResult.success) {
             s.stop('Failed to update frontend integration settings')
-            throw new Error(`Could not update settings: ${updateResult.error}`)
+            outro(`Could not update settings: ${updateResult.error}`)
+            process.exit(1)
         }
 
         s.stop('✓ Updated frontend integration settings')
     } else {
-        s.stop('✓ Frontend integration settings are already configured correctly')
+        log.info('✓ Frontend integration settings are already configured correctly')
     }
 }
 
@@ -426,9 +438,7 @@ export function modifyAppRouterLayout(layoutContent: string): {
  * Attempts to automatically modify a Next.js App Router layout.tsx file
  * to add the AuthProvider wrapper around the children.
  */
-export async function updateAppRouterLayout(layoutPath: string, s: Spinner): Promise<boolean> {
-    s.start(`Analyzing layout file at ${pc.cyan(layoutPath)}`)
-
+export async function updateAppRouterLayout(layoutPath: string): Promise<boolean> {
     try {
         // Read the layout file content
         const layoutContent = await fs.readFile(layoutPath, 'utf-8')
@@ -442,20 +452,15 @@ export async function updateAppRouterLayout(layoutPath: string, s: Spinner): Pro
                 layoutPath,
                 result.updatedContent,
                 'Root layout with AuthProvider',
-                s,
                 true
             )
-            s.stop(`✓ Updated layout.tsx with AuthProvider`)
             return true
         } else if (result.hasAuthProvider) {
-            s.stop(`✓ Layout file already appears to have AuthProvider`)
             return true
         } else {
-            s.stop(pc.yellow(`⚠ Could not automatically update layout file - structure not recognized`))
             return false
         }
     } catch (error) {
-        s.stop(pc.yellow(`⚠ Error updating layout file: ${error}`))
         return false
     }
 }
@@ -641,7 +646,7 @@ export async function updatePagesRouterApp(appPath: string, s: Spinner): Promise
 
         if (result.modified) {
             // Show diff and confirm changes
-            await overwriteFileWithConfirmation(appPath, result.updatedContent, '_app.tsx with AuthProvider', s, true)
+            await overwriteFileWithConfirmation(appPath, result.updatedContent, '_app.tsx with AuthProvider', true)
             s.stop(`✓ Updated _app.tsx with AuthProvider`)
             return true
         } else if (result.hasAuthProvider) {
@@ -657,17 +662,12 @@ export async function updatePagesRouterApp(appPath: string, s: Spinner): Promise
     }
 }
 
-export async function validateNextJsProject(
-    targetPath: string,
-    s: Spinner
-): Promise<{
+export async function validateNextJsProject(targetPath: string): Promise<{
     nextVersion: string | null
     appRouterDir: string | null
     pagesRouterDir: string | null
     isUsingSrcDir: boolean
 }> {
-    s.start('Checking for Next.js project details...')
-
     let nextVersion: string | null = null
     let appRouterDir: string | null = null
     let pagesRouterDir: string | null = null
@@ -676,11 +676,11 @@ export async function validateNextJsProject(
         const pkg = await readPackageJson(targetPath)
         nextVersion = pkg.dependencies?.next || pkg.devDependencies?.next || null
         if (!nextVersion) {
-            s.stop(pc.yellow('Next.js not found in package.json'))
+            outro(pc.yellow('Next.js not found in package.json'))
             process.exit(1)
         }
     } catch (err) {
-        s.stop(pc.yellow('No package.json found or it was invalid'))
+        outro(pc.yellow('No package.json found or it was invalid'))
         process.exit(1)
     }
 
@@ -708,12 +708,6 @@ export async function validateNextJsProject(
     }
 
     const isUsingSrcDir = !!(appRouterDir?.includes('src') || pagesRouterDir?.includes('src'))
-
-    s.stop('Found project details')
-
-    // Use simplified log output
-    log.info(`Detected Next.js ${pc.green(nextVersion || '(unknown)')}`)
-
     return {
         nextVersion,
         appRouterDir,

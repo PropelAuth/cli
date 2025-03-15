@@ -15,24 +15,8 @@ import { promptForJsInstall } from '../helpers/lang/javascriptUtils.js'
 import { loadTemplateResource } from '../helpers/templateUtils.js'
 import { promptForProjectIfNeeded } from '../helpers/projectUtils.js'
 
-type Spinner = {
-    start: (msg?: string) => void
-    stop: (msg?: string) => void
-}
-
 export default async function setupNextJsAppRouter(targetDir: string): Promise<void> {
-    intro(pc.cyan('⚡ Setting up authentication in Next.js project'))
-
     log.info(`${pc.cyan('Welcome!')} We'll set up PropelAuth authentication in your Next.js App Router project.`)
-
-    const shouldProceed = await confirm({
-        message: 'Ready to get started?',
-    })
-
-    if (isCancel(shouldProceed) || !shouldProceed) {
-        outro(pc.red('Ok, bye!'))
-        process.exit(0)
-    }
 
     const targetPath = path.resolve(process.cwd(), targetDir || '.')
     const s = spinner()
@@ -41,39 +25,34 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
         // Prompt for project selection if needed
         const selectedProject = await promptForProjectIfNeeded()
         if (!selectedProject) {
-            log.error('No project selected. Please run the login command first.')
+            outro('No project selected. Please run the login command first.')
             process.exit(1)
         }
-        log.success(`✓ Using project: ${pc.cyan(selectedProject.displayName)}`)
 
-        const { nextVersion, appRouterDir, isUsingSrcDir } = await validateNextJsProject(targetPath, s)
-        log.success(`✓ Found Next.js ${nextVersion || 'unknown'} project with App Router`)
+        const { nextVersion, appRouterDir, isUsingSrcDir } = await validateNextJsProject(targetPath)
 
         // Ensure that they are using the app router
         if (!appRouterDir) {
-            log.error('This project does not appear to be using the App Router.')
+            outro('This project does not appear to be using the App Router.')
             process.exit(1)
         }
+
+        log.success(`✓ Found Next.js ${nextVersion || 'unknown'} project with App Router`)
 
         // Detect port from Next.js configuration
         const port = await getPort(targetPath)
 
         // Configure environment variables with values from the PropelAuth API
-        log.info(pc.cyan('Setting up environment variables'))
         const envPath = path.join(targetPath, '.env.local')
         await configureNextJsEnvironmentVariables(envPath, selectedProject, s)
 
         // Configure redirect paths in PropelAuth dashboard
-        log.info(pc.cyan('Configuring redirect paths'))
         await configureNextJsRedirectPaths(selectedProject, s, port)
 
-        log.info(pc.cyan('Installing dependencies'))
         await promptForJsInstall(targetPath, s, '@propelauth/nextjs')
 
-        log.info(pc.cyan('Creating authentication routes'))
-        s.start('Setting up API route handlers')
         const authApiDir = path.join(appRouterDir, 'api', 'auth', '[slug]')
-        await ensureDirectory(authApiDir, s)
+        await ensureDirectory(authApiDir)
 
         let routeContent = await loadTemplateResource('nextjs', 'route.ts')
         const nextMajor = parseInt((nextVersion || '15').split('.')[0], 10)
@@ -85,26 +64,18 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
         }
 
         const routeFilePath = path.join(authApiDir, 'route.ts')
-        await overwriteFileWithConfirmation(routeFilePath, routeContent, 'Auth route.ts', s)
-        s.stop(`✓ Created authentication routes`)
+        await overwriteFileWithConfirmation(routeFilePath, routeContent, 'Auth route.ts')
+        log.info(`✓ Created authentication routes`)
 
-        log.info(pc.cyan('Setting up middleware'))
-        s.start('Creating middleware file')
         const middlewareContent = await loadTemplateResource('nextjs', 'middleware.ts')
         const middlewareFilePath = path.join(targetPath, isUsingSrcDir ? 'src/middleware.ts' : 'middleware.ts')
-        await overwriteFileWithConfirmation(middlewareFilePath, middlewareContent, 'Middleware file', s)
-        s.stop('✓ Created middleware')
+        await overwriteFileWithConfirmation(middlewareFilePath, middlewareContent, 'Middleware file')
+        log.info('✓ Created middleware')
 
-        log.info(pc.cyan('Configuring root layout'))
         const layoutPath = path.join(appRouterDir, 'layout.tsx')
-        s.start('Checking root layout configuration')
         try {
             await (await import('fs')).promises.stat(layoutPath)
-            s.stop('✓ Found root layout at ' + pc.cyan(path.relative(targetPath, layoutPath)))
-            
-            // Try to automatically update the layout file
-            const autoUpdateSuccess = await updateAppRouterLayout(layoutPath, s)
-            
+            const autoUpdateSuccess = await updateAppRouterLayout(layoutPath)
             if (!autoUpdateSuccess) {
                 // Fall back to manual instructions if automatic update fails
                 log.info(`${pc.cyan('Root Layout Changes Required:')}
@@ -143,7 +114,7 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
                 }
             }
         } catch (err) {
-            s.stop(pc.yellow('⚠ No root layout found; skipping instructions for AuthProvider setup.'))
+            outro(pc.yellow('⚠ No root layout found; skipping instructions for AuthProvider setup.'))
         }
 
         log.success('✓ PropelAuth setup completed!')

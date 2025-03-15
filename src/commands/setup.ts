@@ -15,9 +15,8 @@ type FrameworkOption = {
 
 export default async function setup(directory: string, options: { framework?: string }): Promise<void> {
     const resolvedPath = resolvePath(directory)
-    const s = spinner()
 
-    intro(pc.cyan('⚡ Setting up authentication in your project'))
+    intro(pc.cyan('⚡ PropelAuth Setup'))
 
     // If framework is provided via CLI option, use it directly
     if (options.framework) {

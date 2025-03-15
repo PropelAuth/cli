@@ -7,6 +7,18 @@ import {
 } from '../../../helpers/framework/nextJsUtils.js'
 import * as javascriptUtils from '../../../helpers/lang/javascriptUtils.js'
 
+// Mock the @clack modules
+vi.mock('@clack/prompts', () => ({
+    text: vi.fn(),
+    log: { 
+        warn: vi.fn() 
+    }
+}))
+
+vi.mock('@clack/core', () => ({
+    isCancel: vi.fn()
+}))
+
 describe('modifyAppRouterLayout', () => {
     it('should add AuthProvider to a vanilla layout.tsx file', () => {
         // Vanilla layout file with children in the body
@@ -570,22 +582,68 @@ describe('getPort', () => {
         vi.resetAllMocks()
     })
 
-    it('should return default port if no package.json is found', async () => {
-        vi.spyOn(javascriptUtils, 'readPackageJson').mockRejectedValueOnce(new Error('File not found'))
+    it('should extract port from package.json dev script', async () => {
+        vi.spyOn(javascriptUtils, 'readPackageJson').mockResolvedValueOnce({
+            scripts: {
+                dev: 'next dev --port 4000'
+            }
+        })
 
         const port = await getPort('/fake/path')
-        expect(port).toBe(3000)
+        expect(port).toBe(4000)
     })
 
-    it('should return default port if no dev script is defined', async () => {
+    it('should prompt user for port if not found in package.json', async () => {
+        // Setup mocks
+        vi.spyOn(javascriptUtils, 'readPackageJson').mockResolvedValueOnce({
+            scripts: {
+                dev: 'next dev'  // No port specified
+            }
+        })
+        
+        const prompts = await import('@clack/prompts')
+        const core = await import('@clack/core')
+        
+        // Configure mocks
+        prompts.text.mockResolvedValueOnce('5000')
+        core.isCancel.mockReturnValue(false)
+
+        const port = await getPort('/fake/path')
+        expect(port).toBe(5000)
+    })
+
+    it('should validate user input and return default if invalid', async () => {
+        // Setup mocks
         vi.spyOn(javascriptUtils, 'readPackageJson').mockResolvedValueOnce({})
+        
+        const prompts = await import('@clack/prompts')
+        const core = await import('@clack/core')
+        
+        // Configure mocks
+        prompts.text.mockResolvedValueOnce('not-a-number')
+        core.isCancel.mockReturnValue(false)
 
         const port = await getPort('/fake/path')
-        expect(port).toBe(3000)
+        expect(port).toBe(3000) // Default port when input is invalid
+    })
+    
+    it('should throw error if user cancels the port selection', async () => {
+        // Setup mocks
+        vi.spyOn(javascriptUtils, 'readPackageJson').mockResolvedValueOnce({})
+        
+        const prompts = await import('@clack/prompts')
+        const core = await import('@clack/core')
+        
+        // Configure mocks
+        const cancelSymbol = Symbol.for('clack.cancel')
+        prompts.text.mockResolvedValueOnce(cancelSymbol)
+        core.isCancel.mockReturnValueOnce(true)
+        
+        // The function should throw when user cancels
+        await expect(getPort('/fake/path')).rejects.toThrow('Port selection cancelled')
     })
 
-    // The actual implementation of getPort is unable to extract ports consistently
-    // in the test environment. Instead, we'll test the regex pattern directly.
+    // The regex pattern tests remain unchanged
     it('should match port pattern with -p flag', () => {
         const devScript = 'next dev -p 4000'
         const portMatch = devScript.match(/(?:--|:)port\s+(\d+)/) || devScript.match(/-p\s+(\d+)/)

@@ -1,6 +1,6 @@
 import path from 'path'
 import pc from 'picocolors'
-import { spinner, intro, outro, confirm, text, log } from '@clack/prompts'
+import { spinner, intro, outro, confirm, log } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 
 import { ensureDirectory, overwriteFileWithConfirmation } from '../helpers/fileUtils.js'
@@ -15,76 +15,49 @@ import { promptForJsInstall } from '../helpers/lang/javascriptUtils.js'
 import { loadTemplateResource } from '../helpers/templateUtils.js'
 import { promptForProjectIfNeeded } from '../helpers/projectUtils.js'
 
-type Spinner = {
-    start: (msg?: string) => void
-    stop: (msg?: string) => void
-}
-
 export default async function setupNextJsPagesRouter(targetDir: string): Promise<void> {
-    intro(pc.cyan('⚡ Setting up authentication in Next.js project'))
-
     log.info(`${pc.cyan('Welcome!')} We'll set up PropelAuth authentication in your Next.js Pages Router project.`)
-
-    const shouldProceed = await confirm({
-        message: 'Ready to get started?',
-    })
-
-    if (isCancel(shouldProceed) || !shouldProceed) {
-        outro(pc.red('Ok, bye!'))
-        process.exit(0)
-    }
 
     const targetPath = path.resolve(process.cwd(), targetDir || '.')
     const s = spinner()
 
     try {
         // Prompt for project selection if needed
-        log.info(pc.cyan('Selecting PropelAuth project'))
         const selectedProject = await promptForProjectIfNeeded()
         if (!selectedProject) {
-            log.error('No project selected. Please run the login command first.')
+            outro('No project selected. Please run the login command first.')
             process.exit(1)
         }
-        log.success(`✓ Using project: ${pc.cyan(selectedProject.displayName)}`)
 
-        log.info('Checking Next.js project')
-        const { nextVersion, pagesRouterDir, isUsingSrcDir } = await validateNextJsProject(targetPath, s)
-        
+        const { nextVersion, pagesRouterDir, isUsingSrcDir } = await validateNextJsProject(targetPath)
+
         // Ensure that they are using the Pages Router
         if (!pagesRouterDir) {
             log.error('This project does not appear to be using the Pages Router.')
             process.exit(1)
         }
-        
-        log.success(
-            `✓ Found Next.js ${nextVersion || 'unknown'} project with Pages Router at ${pc.cyan(path.relative(targetPath, pagesRouterDir))}`
-        )
+
+        log.success(`✓ Found Next.js ${nextVersion || 'unknown'} project with App Router`)
 
         // Detect port from Next.js configuration
         const port = await getPort(targetPath)
 
         // Configure environment variables with values from the PropelAuth API
-        log.info(pc.cyan('Setting up environment variables'))
         const envPath = path.join(targetPath, '.env.local')
         await configureNextJsEnvironmentVariables(envPath, selectedProject, s)
 
         // Configure redirect paths in PropelAuth dashboard
-        log.info(pc.cyan('Configuring redirect paths'))
         await configureNextJsRedirectPaths(selectedProject, s, port)
 
-        log.info(pc.cyan('Installing dependencies'))
         await promptForJsInstall(targetPath, s, '@propelauth/nextjs')
 
-        log.info(pc.cyan('Creating authentication routes'))
-        s.start('Setting up API route handlers')
-        
         // Create app directory if needed
         const appRouterDir = path.join(targetPath, isUsingSrcDir ? 'src/app' : 'app')
-        await ensureDirectory(appRouterDir, s)
-        
+        await ensureDirectory(appRouterDir)
+
         // Set up auth API routes in app directory
         const authApiDir = path.join(appRouterDir, 'api', 'auth', '[slug]')
-        await ensureDirectory(authApiDir, s)
+        await ensureDirectory(authApiDir)
 
         let routeContent = await loadTemplateResource('nextjs', 'route.ts')
         const nextMajor = parseInt((nextVersion || '15').split('.')[0], 10)
@@ -96,19 +69,15 @@ export default async function setupNextJsPagesRouter(targetDir: string): Promise
         }
 
         const routeFilePath = path.join(authApiDir, 'route.ts')
-        await overwriteFileWithConfirmation(routeFilePath, routeContent, 'Auth route.ts', s)
-        s.stop(`✓ Created authentication routes`)
+        await overwriteFileWithConfirmation(routeFilePath, routeContent, 'Auth route.ts')
 
-        log.info(pc.cyan('Configuring _app.tsx'))
         const appPath = path.join(pagesRouterDir, '_app.tsx')
-        s.start('Checking _app.tsx configuration')
         try {
             await (await import('fs')).promises.stat(appPath)
-            s.stop('✓ Found _app.tsx at ' + pc.cyan(path.relative(targetPath, appPath)))
 
             // Try to automatically update the _app.tsx file
             const autoUpdateSuccess = await updatePagesRouterApp(appPath, s)
-            
+
             if (!autoUpdateSuccess) {
                 // Fall back to manual instructions if automatic update fails
                 log.info(`${pc.cyan('_app.tsx Changes Required:')}
@@ -147,13 +116,13 @@ export default async function setupNextJsPagesRouter(targetDir: string): Promise
                 }
             }
         } catch (err) {
-            s.stop(pc.yellow('⚠ No _app.tsx found; skipping instructions for AuthProvider setup.'))
+            outro(pc.yellow('⚠ No _app.tsx found; skipping instructions for AuthProvider setup.'))
         }
 
         log.success('✓ PropelAuth setup completed!')
 
         // Show example usage code snippets
-        log.info(`
+        console.log(`
 ${pc.cyan('Example Usage:')}
 ${pc.dim('─────────────────────────────────────────────')}
 
@@ -196,8 +165,7 @@ const WelcomeMessage = () => {
 ${pc.dim('─────────────────────────────────────────────')}
 
 ${pc.cyan('For full documentation and more examples, visit:')}
-${pc.underline('https://docs.propelauth.com/reference/fullstack-apis/nextjspages/installation-and-setup')}`
-        )
+${pc.underline('https://docs.propelauth.com/reference/fullstack-apis/nextjspages/installation-and-setup')}`)
         outro(pc.green('PropelAuth has been successfully set up in your Next.js project!'))
         process.exit(0)
     } catch (error) {
