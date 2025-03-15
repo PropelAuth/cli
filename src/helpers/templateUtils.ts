@@ -11,7 +11,7 @@ import fs from 'fs/promises'
 export async function loadTemplateResource(...templatePath: string[]): Promise<string> {
     const __filename = fileURLToPath(import.meta.url)
     const __dirname = path.dirname(__filename)
-    const fullPath = path.join(__dirname, 'templates', ...templatePath)
+    const fullPath = path.join(__dirname, '..', 'templates', ...templatePath)
 
     try {
         return await fs.readFile(fullPath, 'utf-8')
