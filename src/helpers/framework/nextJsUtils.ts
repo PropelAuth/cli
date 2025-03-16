@@ -277,7 +277,6 @@ export async function configureNextJsRedirectPaths(
             test_env: testEnv,
             login_redirect_path: loginRedirectPath,
             logout_redirect_path: logoutRedirectPath,
-            allowed_urls: currentSettings.allowed_urls,
         })
 
         if (!updateResult.success) {
