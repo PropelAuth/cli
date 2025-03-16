@@ -4,6 +4,9 @@ import {
     modifyPagesRouterApp,
     parseEnvVars,
     getPort,
+    testEnvToUrl,
+    urlToTestEnv,
+    TestEnv,
 } from '../../../helpers/framework/nextJsUtils.js'
 import * as javascriptUtils from '../../../helpers/lang/javascriptUtils.js'
 
@@ -514,6 +517,71 @@ export default function App({ Component, pageProps }: AppProps) {
     })
 })
 
+describe('testEnvToUrl', () => {
+    it('should convert localhost test env to URL', () => {
+        const testEnv: TestEnv = {
+            type: 'Localhost',
+            port: 3000
+        }
+        expect(testEnvToUrl(testEnv)).toBe('http://localhost:3000')
+    })
+
+    it('should handle SchemeAndDomain test env', () => {
+        const testEnv: TestEnv = {
+            type: 'SchemeAndDomain',
+            scheme_and_domain: 'https://example.com'
+        }
+        expect(testEnvToUrl(testEnv)).toBe('https://example.com')
+    })
+})
+
+describe('urlToTestEnv', () => {
+    it('should convert localhost URL to test env', () => {
+        const url = 'http://localhost:3000'
+        const expected: TestEnv = {
+            type: 'Localhost',
+            port: 3000
+        }
+        expect(urlToTestEnv(url)).toEqual(expected)
+    })
+
+    it('should handle URLs with default port', () => {
+        const url = 'http://localhost'
+        const expected: TestEnv = {
+            type: 'Localhost',
+            port: 3000
+        }
+        expect(urlToTestEnv(url)).toEqual(expected)
+    })
+
+    it('should convert non-localhost URLs to SchemeAndDomain', () => {
+        const url = 'https://example.com'
+        const expected: TestEnv = {
+            type: 'SchemeAndDomain',
+            scheme_and_domain: url
+        }
+        expect(urlToTestEnv(url)).toEqual(expected)
+    })
+
+    it('should handle port numbers as input', () => {
+        const input = '3000'
+        const expected: TestEnv = {
+            type: 'Localhost',
+            port: 3000
+        }
+        expect(urlToTestEnv(input)).toEqual(expected)
+    })
+
+    it('should provide default for invalid inputs', () => {
+        const input = 'not-a-url-or-port'
+        const expected: TestEnv = {
+            type: 'Localhost',
+            port: 3000
+        }
+        expect(urlToTestEnv(input)).toEqual(expected)
+    })
+})
+
 describe('parseEnvVars', () => {
     it('should parse basic environment variables', async () => {
         const envContent = `
@@ -589,8 +657,10 @@ describe('getPort', () => {
             }
         })
 
-        const port = await getPort('/fake/path')
-        expect(port).toBe(4000)
+        const result = await getPort('/fake/path')
+        expect(result.port).toBe(4000)
+        expect(result.url).toBe('http://localhost:4000')
+        expect(result.testEnv).toEqual({ type: 'Localhost', port: 4000 })
     })
 
     it('should prompt user for port if not found in package.json', async () => {
@@ -608,11 +678,13 @@ describe('getPort', () => {
         prompts.text.mockResolvedValueOnce('5000')
         core.isCancel.mockReturnValue(false)
 
-        const port = await getPort('/fake/path')
-        expect(port).toBe(5000)
+        const result = await getPort('/fake/path')
+        expect(result.port).toBe(5000)
+        expect(result.url).toBe('http://localhost:5000')
+        expect(result.testEnv).toEqual({ type: 'Localhost', port: 5000 })
     })
 
-    it('should validate user input and return default if invalid', async () => {
+    it('should handle localhost URL input', async () => {
         // Setup mocks
         vi.spyOn(javascriptUtils, 'readPackageJson').mockResolvedValueOnce({})
         
@@ -620,14 +692,53 @@ describe('getPort', () => {
         const core = await import('@clack/core')
         
         // Configure mocks
-        prompts.text.mockResolvedValueOnce('not-a-number')
+        prompts.text.mockResolvedValueOnce('http://localhost:4000')
         core.isCancel.mockReturnValue(false)
 
-        const port = await getPort('/fake/path')
-        expect(port).toBe(3000) // Default port when input is invalid
+        const result = await getPort('/fake/path')
+        expect(result.port).toBe(4000)
+        expect(result.url).toBe('http://localhost:4000')
+        expect(result.testEnv).toEqual({ type: 'Localhost', port: 4000 })
+    })
+
+    it('should handle custom domain URL input', async () => {
+        // Setup mocks
+        vi.spyOn(javascriptUtils, 'readPackageJson').mockResolvedValueOnce({})
+        
+        const prompts = await import('@clack/prompts')
+        const core = await import('@clack/core')
+        
+        // Configure mocks
+        prompts.text.mockResolvedValueOnce('https://example.com')
+        core.isCancel.mockReturnValue(false)
+
+        const result = await getPort('/fake/path')
+        expect(result.port).toBe(3000) // Default port for non-localhost URLs
+        expect(result.url).toBe('https://example.com')
+        expect(result.testEnv).toEqual({ 
+            type: 'SchemeAndDomain', 
+            scheme_and_domain: 'https://example.com' 
+        })
+    })
+
+    it('should handle invalid input and use defaults', async () => {
+        // Setup mocks
+        vi.spyOn(javascriptUtils, 'readPackageJson').mockResolvedValueOnce({})
+        
+        const prompts = await import('@clack/prompts')
+        const core = await import('@clack/core')
+        
+        // Configure mocks
+        prompts.text.mockResolvedValueOnce('not-a-valid-url-or-port')
+        core.isCancel.mockReturnValue(false)
+
+        const result = await getPort('/fake/path')
+        expect(result.port).toBe(3000) // Default port
+        expect(result.url).toBe('http://localhost:3000')
+        expect(result.testEnv).toEqual({ type: 'Localhost', port: 3000 })
     })
     
-    it('should throw error if user cancels the port selection', async () => {
+    it('should throw error if user cancels the selection', async () => {
         // Setup mocks
         vi.spyOn(javascriptUtils, 'readPackageJson').mockResolvedValueOnce({})
         
@@ -640,7 +751,7 @@ describe('getPort', () => {
         core.isCancel.mockReturnValueOnce(true)
         
         // The function should throw when user cancels
-        await expect(getPort('/fake/path')).rejects.toThrow('Port selection cancelled')
+        await expect(getPort('/fake/path')).rejects.toThrow('URL selection cancelled')
     })
 
     // The regex pattern tests remain unchanged

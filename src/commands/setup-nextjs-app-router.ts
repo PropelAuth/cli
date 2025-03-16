@@ -39,15 +39,15 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
 
         log.success(`✓ Found Next.js ${nextVersion || 'unknown'} project with App Router`)
 
-        // Detect port from Next.js configuration
-        const port = await getPort(targetPath)
+        // Detect port or URL from Next.js configuration
+        const portOrUrl = await getPort(targetPath)
 
         // Configure environment variables with values from the PropelAuth API
         const envPath = path.join(targetPath, '.env.local')
-        await configureNextJsEnvironmentVariables(envPath, selectedProject, s)
+        await configureNextJsEnvironmentVariables(envPath, selectedProject, s, portOrUrl)
 
         // Configure redirect paths in PropelAuth dashboard
-        await configureNextJsRedirectPaths(selectedProject, s, port)
+        await configureNextJsRedirectPaths(selectedProject, s, portOrUrl)
 
         await promptForJsInstall(targetPath, s, '@propelauth/nextjs')
 

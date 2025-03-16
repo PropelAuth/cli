@@ -42,7 +42,13 @@ export const NEXTJS_REQUIRED_ENV_VARS = {
     },
 }
 
-export async function getPort(targetPath: string): Promise<number> {
+export interface PortOrUrl {
+    port: number
+    url: string
+    testEnv: TestEnv
+}
+
+export async function getPort(targetPath: string): Promise<PortOrUrl> {
     // Check if the project has a custom port defined
     try {
         const packageJson = await readPackageJson(targetPath)
@@ -51,32 +57,50 @@ export async function getPort(targetPath: string): Promise<number> {
         const devScript = packageJson.scripts?.dev || ''
         const portMatch = devScript.match(/(?:--|:)port\s+(\d+)/)
         if (portMatch) {
-            return parseInt(portMatch[1], 10)
+            const port = parseInt(portMatch[1], 10)
+            const testEnv: TestEnv = {
+                type: 'Localhost',
+                port
+            }
+            return {
+                port,
+                url: testEnvToUrl(testEnv),
+                testEnv
+            }
         }
     } catch (err) {
-        // Ignore errors, just use the default port
+        // Ignore errors, proceed to user prompt
     }
 
     // If no port was found automatically, prompt the user to enter one
-    const userPort = await text({
-        message: 'Enter the port your Next.js app runs on:',
-        initialValue: '3000', // Default Next.js port
+    const userInput = await text({
+        message: 'Enter the URL your Next.js app runs on:',
+        initialValue: 'http://localhost:3000',
+        placeholder: 'e.g. http://localhost:3000 or https://myapp.com'
     })
 
-    if (isCancel(userPort)) {
-        throw new Error('Port selection cancelled')
+    if (isCancel(userInput)) {
+        throw new Error('URL selection cancelled')
     }
 
-    // Parse the user input as a number
-    const port = parseInt(userPort.toString(), 10)
+    const inputStr = userInput.toString().trim()
 
-    // Validate that the input is a valid port number
-    if (isNaN(port) || port < 1 || port > 65535) {
-        log.warn('Invalid port number. Using default port 3000.')
-        return 3000
+    // Parse the user input as a URL or port
+    const testEnv = urlToTestEnv(inputStr)
+    const url = testEnvToUrl(testEnv)
+    
+    // Get the port for environment variable configuration
+    // For non-localhost URLs, we still need to set up the redirect URI with a port
+    let port = 3000
+    if (testEnv.type === 'Localhost') {
+        port = testEnv.port
     }
 
-    return port
+    return {
+        port,
+        url,
+        testEnv
+    }
 }
 
 export async function parseEnvVars(envContent: string): Promise<Record<string, string>> {
@@ -98,7 +122,8 @@ export async function parseEnvVars(envContent: string): Promise<Record<string, s
 export async function configureNextJsEnvironmentVariables(
     envPath: string,
     selectedProject: PropelAuthProject,
-    s: Spinner
+    s: Spinner,
+    portOrUrl?: PortOrUrl
 ): Promise<void> {
     const apiKey = await getApiKey()
     if (!apiKey) {
@@ -172,6 +197,15 @@ export async function configureNextJsEnvironmentVariables(
         }
     }
 
+    // Get the port for the callback URL - using portOrUrl if available
+    let redirectUri = 'http://localhost:3000/api/auth/callback'
+    if (portOrUrl) {
+        if (portOrUrl.testEnv.type === 'Localhost') {
+            redirectUri = `http://localhost:${portOrUrl.port}/api/auth/callback`
+        }
+        // For non-localhost URLs, we keep the default callback URL with port 3000
+    }
+
     const customEnvVars = {
         NEXT_PUBLIC_AUTH_URL: {
             description: 'Your Auth URL',
@@ -191,7 +225,7 @@ export async function configureNextJsEnvironmentVariables(
         PROPELAUTH_REDIRECT_URI: {
             description: 'Redirect URI for authentication callbacks',
             required: true,
-            value: 'http://localhost:3000/api/auth/callback',
+            value: redirectUri,
         },
     }
 
@@ -203,10 +237,60 @@ function formatVerifierKey(verifierKey: string): string {
     return verifierKey.replace(/\n/g, '\\n')
 }
 
+/**
+ * Converts a TestEnv object to a URL string
+ */
+export function testEnvToUrl(testEnv: TestEnv): string {
+    if (testEnv.type === 'Localhost') {
+        return `http://localhost:${testEnv.port}`
+    } else if (testEnv.type === 'SchemeAndDomain') {
+        return testEnv.scheme_and_domain
+    }
+    return ''
+}
+
+/**
+ * Parses a URL string into a TestEnv object
+ */
+export function urlToTestEnv(url: string): TestEnv {
+    try {
+        const parsedUrl = new URL(url)
+        
+        // Check if it's localhost
+        if (parsedUrl.hostname === 'localhost') {
+            return {
+                type: 'Localhost',
+                port: parseInt(parsedUrl.port || '3000', 10)
+            }
+        }
+        
+        // Otherwise, use SchemeAndDomain
+        return {
+            type: 'SchemeAndDomain',
+            scheme_and_domain: url
+        }
+    } catch (e) {
+        // If URL parsing fails, assume it's just a port number
+        const port = parseInt(url, 10)
+        if (!isNaN(port)) {
+            return {
+                type: 'Localhost',
+                port
+            }
+        }
+        
+        // Default to localhost:3000
+        return {
+            type: 'Localhost',
+            port: 3000
+        }
+    }
+}
+
 export async function configureNextJsRedirectPaths(
     selectedProject: PropelAuthProject,
     s: Spinner,
-    port: number = 3000
+    portOrUrl: PortOrUrl
 ): Promise<void> {
     const apiKey = await getApiKey()
     if (!apiKey) {
@@ -228,7 +312,14 @@ export async function configureNextJsRedirectPaths(
     // Check if the current settings match what we want to set
     const currentLoginPath = currentSettings.login_redirect_path
     const currentLogoutPath = currentSettings.logout_redirect_path
-    const currentPort = currentSettings.test_env?.port || 3000
+    const currentTestEnv = currentSettings.test_env
+    
+    // Use the expected TestEnv from portOrUrl
+    const expectedTestEnv = portOrUrl.testEnv
+    
+    // Convert the test env to a URL for display purposes
+    const currentUrl = currentTestEnv ? testEnvToUrl(currentTestEnv) : 'none'
+    const expectedUrl = portOrUrl.url
 
     let needsUpdate = false
     let updateMessage = ''
@@ -242,10 +333,11 @@ export async function configureNextJsRedirectPaths(
         needsUpdate = true
         updateMessage += `\n- Logout redirect path: ${pc.red(currentLogoutPath)} → ${pc.green(logoutRedirectPath)}`
     }
-
-    if (currentPort !== port) {
+    
+    // Compare as URLs for better display
+    if (currentUrl !== expectedUrl) {
         needsUpdate = true
-        updateMessage += `\n- Development port: ${pc.red(currentPort.toString())} → ${pc.green(port.toString())}`
+        updateMessage += `\n- Development URL: ${pc.red(currentUrl)} → ${pc.green(expectedUrl)}`
     }
 
     if (needsUpdate) {
@@ -268,10 +360,8 @@ export async function configureNextJsRedirectPaths(
 
         s.start('Updating frontend integration settings')
 
-        const testEnv: TestEnv = {
-            type: 'Localhost',
-            port,
-        }
+        // Use the TestEnv from the portOrUrl
+        const testEnv = portOrUrl.testEnv
 
         const updateResult = await updateFrontendIntegration(apiKey, selectedProject.orgId, selectedProject.projectId, {
             test_env: testEnv,

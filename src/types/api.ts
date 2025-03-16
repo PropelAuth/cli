@@ -25,10 +25,17 @@ export interface BackendIntegrationResponse {
     }
 }
 
-export interface TestEnv {
+export interface TestEnvLocalhost {
     type: 'Localhost'
     port: number
 }
+
+export interface TestEnvSchemeAndDomain {
+    type: 'SchemeAndDomain'
+    scheme_and_domain: string
+}
+
+export type TestEnv = TestEnvLocalhost | TestEnvSchemeAndDomain
 
 export interface FrontendIntegrationResponse {
     test: {
