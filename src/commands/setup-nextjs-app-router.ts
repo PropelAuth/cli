@@ -14,6 +14,7 @@ import {
 import { promptForJsInstall } from '../helpers/lang/javascriptUtils.js'
 import { loadTemplateResource } from '../helpers/templateUtils.js'
 import { promptForProjectIfNeeded } from '../helpers/projectUtils.js'
+import { sleep } from '../helpers/timeUtils.js'
 
 export default async function setupNextJsAppRouter(targetDir: string): Promise<void> {
     log.info(`${pc.cyan('Welcome!')} We'll set up PropelAuth authentication in your Next.js App Router project.`)
@@ -45,11 +46,14 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
         // Configure environment variables with values from the PropelAuth API
         const envPath = path.join(targetPath, '.env.local')
         await configureNextJsEnvironmentVariables(envPath, selectedProject, s, portOrUrl)
+        await sleep(500)
 
         // Configure redirect paths in PropelAuth dashboard
         await configureNextJsRedirectPaths(selectedProject, s, portOrUrl)
+        await sleep(500)
 
         await promptForJsInstall(targetPath, s, '@propelauth/nextjs')
+        await sleep(500)
 
         const authApiDir = path.join(appRouterDir, 'api', 'auth', '[slug]')
         await ensureDirectory(authApiDir)
@@ -65,12 +69,14 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
 
         const routeFilePath = path.join(authApiDir, 'route.ts')
         await overwriteFileWithConfirmation(routeFilePath, routeContent, 'Auth route.ts')
-        log.info(`✓ Created authentication routes`)
+        log.success(`✓ Created authentication routes`)
+        await sleep(500)
 
         const middlewareContent = await loadTemplateResource('nextjs', 'middleware.ts')
         const middlewareFilePath = path.join(targetPath, isUsingSrcDir ? 'src/middleware.ts' : 'middleware.ts')
         await overwriteFileWithConfirmation(middlewareFilePath, middlewareContent, 'Middleware file')
-        log.info('✓ Created middleware')
+        log.success('✓ Created middleware')
+        await sleep(500)
 
         const layoutPath = path.join(appRouterDir, 'layout.tsx')
         try {
@@ -118,6 +124,7 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
         }
 
         log.success('✓ PropelAuth setup completed!')
+        await sleep(500)
 
         // Show example usage code snippets
         console.log(`
@@ -131,6 +138,8 @@ const WelcomeMessage = async () => {
     const user = await getUserOrRedirect()
     return <div>Welcome, {user.email}!</div>
 }
+
+${pc.dim('─────────────────────────────────────────────')}
 
 ${pc.bold('Client Component Example:')}
 "use client";

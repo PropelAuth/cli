@@ -60,12 +60,12 @@ export async function getPort(targetPath: string): Promise<PortOrUrl> {
             const port = parseInt(portMatch[1], 10)
             const testEnv: TestEnv = {
                 type: 'Localhost',
-                port
+                port,
             }
             return {
                 port,
                 url: testEnvToUrl(testEnv),
-                testEnv
+                testEnv,
             }
         }
     } catch (err) {
@@ -76,7 +76,7 @@ export async function getPort(targetPath: string): Promise<PortOrUrl> {
     const userInput = await text({
         message: 'Enter the URL your Next.js app runs on:',
         initialValue: 'http://localhost:3000',
-        placeholder: 'e.g. http://localhost:3000 or https://myapp.com'
+        placeholder: 'e.g. http://localhost:3000 or https://myapp.com',
     })
 
     if (isCancel(userInput)) {
@@ -88,7 +88,7 @@ export async function getPort(targetPath: string): Promise<PortOrUrl> {
     // Parse the user input as a URL or port
     const testEnv = urlToTestEnv(inputStr)
     const url = testEnvToUrl(testEnv)
-    
+
     // Get the port for environment variable configuration
     // For non-localhost URLs, we still need to set up the redirect URI with a port
     let port = 3000
@@ -99,7 +99,7 @@ export async function getPort(targetPath: string): Promise<PortOrUrl> {
     return {
         port,
         url,
-        testEnv
+        testEnv,
     }
 }
 
@@ -255,19 +255,19 @@ export function testEnvToUrl(testEnv: TestEnv): string {
 export function urlToTestEnv(url: string): TestEnv {
     try {
         const parsedUrl = new URL(url)
-        
+
         // Check if it's localhost
         if (parsedUrl.hostname === 'localhost') {
             return {
                 type: 'Localhost',
-                port: parseInt(parsedUrl.port || '3000', 10)
+                port: parseInt(parsedUrl.port || '3000', 10),
             }
         }
-        
+
         // Otherwise, use SchemeAndDomain
         return {
             type: 'SchemeAndDomain',
-            scheme_and_domain: url
+            scheme_and_domain: url,
         }
     } catch (e) {
         // If URL parsing fails, assume it's just a port number
@@ -275,14 +275,14 @@ export function urlToTestEnv(url: string): TestEnv {
         if (!isNaN(port)) {
             return {
                 type: 'Localhost',
-                port
+                port,
             }
         }
-        
+
         // Default to localhost:3000
         return {
             type: 'Localhost',
-            port: 3000
+            port: 3000,
         }
     }
 }
@@ -313,10 +313,10 @@ export async function configureNextJsRedirectPaths(
     const currentLoginPath = currentSettings.login_redirect_path
     const currentLogoutPath = currentSettings.logout_redirect_path
     const currentTestEnv = currentSettings.test_env
-    
+
     // Use the expected TestEnv from portOrUrl
     const expectedTestEnv = portOrUrl.testEnv
-    
+
     // Convert the test env to a URL for display purposes
     const currentUrl = currentTestEnv ? testEnvToUrl(currentTestEnv) : 'none'
     const expectedUrl = portOrUrl.url
@@ -333,7 +333,7 @@ export async function configureNextJsRedirectPaths(
         needsUpdate = true
         updateMessage += `\n- Logout redirect path: ${pc.red(currentLogoutPath)} → ${pc.green(logoutRedirectPath)}`
     }
-    
+
     // Compare as URLs for better display
     if (currentUrl !== expectedUrl) {
         needsUpdate = true
@@ -341,9 +341,10 @@ export async function configureNextJsRedirectPaths(
     }
 
     if (needsUpdate) {
+        log.info(`Updates needed to test environment settings\n${updateMessage}`)
+
         const confirmUpdate = await confirm({
-            message:
-                "Your test environment isn't configured for Next.js with the port you specified. Would you like us to update your config?",
+            message: 'Your test environment config needs to be updated, would you like to apply these changes now?',
             active: pc.green('yes'),
             inactive: pc.yellow('no'),
         })

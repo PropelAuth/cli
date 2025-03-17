@@ -14,6 +14,7 @@ import {
 import { promptForJsInstall } from '../helpers/lang/javascriptUtils.js'
 import { loadTemplateResource } from '../helpers/templateUtils.js'
 import { promptForProjectIfNeeded } from '../helpers/projectUtils.js'
+import { sleep } from '../helpers/timeUtils.js'
 
 export default async function setupNextJsPagesRouter(targetDir: string): Promise<void> {
     log.info(`${pc.cyan('Welcome!')} We'll set up PropelAuth authentication in your Next.js Pages Router project.`)
@@ -33,11 +34,11 @@ export default async function setupNextJsPagesRouter(targetDir: string): Promise
 
         // Ensure that they are using the Pages Router
         if (!pagesRouterDir) {
-            log.error('This project does not appear to be using the Pages Router.')
+            outro('This project does not appear to be using the Pages Router.')
             process.exit(1)
         }
 
-        log.success(`✓ Found Next.js ${nextVersion || 'unknown'} project with App Router`)
+        log.success(`✓ Found Next.js ${nextVersion || 'unknown'} project with Pages Router`)
 
         // Detect port or URL from Next.js configuration
         const portOrUrl = await getPort(targetPath)
@@ -45,11 +46,14 @@ export default async function setupNextJsPagesRouter(targetDir: string): Promise
         // Configure environment variables with values from the PropelAuth API
         const envPath = path.join(targetPath, '.env.local')
         await configureNextJsEnvironmentVariables(envPath, selectedProject, s, portOrUrl)
+        await sleep(500)
 
         // Configure redirect paths in PropelAuth dashboard
         await configureNextJsRedirectPaths(selectedProject, s, portOrUrl)
+        await sleep(500)
 
         await promptForJsInstall(targetPath, s, '@propelauth/nextjs')
+        await sleep(500)
 
         // Create app directory if needed
         const appRouterDir = path.join(targetPath, isUsingSrcDir ? 'src/app' : 'app')
@@ -70,6 +74,8 @@ export default async function setupNextJsPagesRouter(targetDir: string): Promise
 
         const routeFilePath = path.join(authApiDir, 'route.ts')
         await overwriteFileWithConfirmation(routeFilePath, routeContent, 'Auth route.ts')
+        log.success(`✓ Created authentication routes`)
+        await sleep(500)
 
         const appPath = path.join(pagesRouterDir, '_app.tsx')
         try {
@@ -78,7 +84,10 @@ export default async function setupNextJsPagesRouter(targetDir: string): Promise
             // Try to automatically update the _app.tsx file
             const autoUpdateSuccess = await updatePagesRouterApp(appPath, s)
 
-            if (!autoUpdateSuccess) {
+            if (autoUpdateSuccess) {
+                log.success('✓ Updated _app.tsx with AuthProvider')
+                await sleep(500)
+            } else {
                 // Fall back to manual instructions if automatic update fails
                 log.info(`${pc.cyan('_app.tsx Changes Required:')}
 
@@ -114,12 +123,15 @@ export default async function setupNextJsPagesRouter(targetDir: string): Promise
                 if (!answer) {
                     outro(pc.yellow('⚠ Please make the required changes to your _app.tsx.'))
                 }
+                await sleep(500)
             }
         } catch (err) {
-            outro(pc.yellow('⚠ No _app.tsx found; skipping instructions for AuthProvider setup.'))
+            log.warn('⚠ No _app.tsx found; skipping instructions for AuthProvider setup.')
+            await sleep(500)
         }
 
         log.success('✓ PropelAuth setup completed!')
+        await sleep(500)
 
         // Show example usage code snippets
         console.log(`
