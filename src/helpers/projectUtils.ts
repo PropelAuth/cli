@@ -161,7 +161,7 @@ export async function promptForProjectIfNeeded(): Promise<PropelAuthProject | nu
 
     if (!result.success) {
         if (result.error === 'unauthorized') {
-            outro(pc.red('Your API key appears to be invalid. Please login again.'))
+            outro(pc.red('Your Personal API Key appears to be invalid. Please login again.'))
         } else {
             outro(pc.red(`Error: ${result.error}`))
         }

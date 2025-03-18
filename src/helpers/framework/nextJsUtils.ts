@@ -28,7 +28,7 @@ export const NEXTJS_REQUIRED_ENV_VARS = {
         default: '',
     },
     PROPELAUTH_API_KEY: {
-        description: 'Your API key for PropelAuth',
+        description: 'Your Backend Integration API Key for PropelAuth',
         required: true,
     },
     PROPELAUTH_VERIFIER_KEY: {
@@ -158,9 +158,9 @@ export async function configureNextJsEnvironmentVariables(
 
     // If API key is not already set, ask if they want to generate one
     if (!apiKeyValue) {
-        log.info('No API key found in environment file')
+        log.info('No Backend Integration API Key found in environment file')
         const createNew = await confirm({
-            message: 'Would you like to generate a new API key for this project?',
+            message: 'Would you like to generate a new Backend Integration API Key for this project?',
             active: pc.green('yes'),
             inactive: pc.yellow('no'),
         })
@@ -171,7 +171,7 @@ export async function configureNextJsEnvironmentVariables(
 
         if (createNew) {
             const keyName = await text({
-                message: 'Enter a name for the new API key:',
+                message: 'Enter a name for the new Backend Integration API Key:',
                 initialValue: 'Next.js Integration',
             })
 
@@ -179,21 +179,21 @@ export async function configureNextJsEnvironmentVariables(
                 throw new Error('API key creation cancelled')
             }
 
-            s.start('Creating new API key')
+            s.start('Creating new Backend Integration API Key')
             const createKeyResult = await createApiKey(apiKey, selectedProject.orgId, selectedProject.projectId, {
                 name: keyName.toString(),
                 read_only: false,
             })
 
             if (!createKeyResult.success) {
-                outro(`Could not create API key: ${createKeyResult.error}`)
+                outro(`Could not create Backend Integration API Key: ${createKeyResult.error}`)
                 process.exit(1)
             }
 
             apiKeyValue = createKeyResult.data.api_key
-            s.stop('✓ Created new API key')
+            s.stop('✓ Created new Backend Integration API Key')
         } else {
-            log.warn('⚠ No API key generated. You will need to fill in the PROPELAUTH_API_KEY value manually.')
+            log.warn('⚠ No Backend Integration API Key generated. You will need to fill in the PROPELAUTH_API_KEY value manually.')
         }
     }
 
@@ -213,7 +213,7 @@ export async function configureNextJsEnvironmentVariables(
             value: auth_url_origin,
         },
         PROPELAUTH_API_KEY: {
-            description: 'Your API key for PropelAuth',
+            description: 'Your Backend Integration API Key for PropelAuth',
             required: true,
             value: apiKeyValue,
         },

@@ -7,11 +7,11 @@ import { fetchProjects } from '../api.js'
 import { CONFIG_FILE, PropelAuthConfig, getConfig, selectProject } from '../helpers/projectUtils.js'
 
 async function promptForApiKey(): Promise<string> {
-    log.info('Please visit the following URL to create a personal API key:')
+    log.info('Please visit the following URL to create a Personal API Key:')
     log.info(pc.underline(pc.cyan('https://auth.propelauth.com/api_keys/personal')))
 
     const apiKey = await password({
-        message: 'Enter your API key',
+        message: 'Enter your Personal API Key',
         mask: '*',
     })
 
@@ -33,7 +33,7 @@ export default async function login(): Promise<void> {
 
     if (existingApiKey) {
         const shouldOverwrite = await confirm({
-            message: 'An API key is already configured. Would you like to overwrite it?',
+            message: 'A Personal API Key is already configured. Would you like to overwrite it?',
             active: 'Yes',
             inactive: 'No',
             initialValue: false,
@@ -45,7 +45,7 @@ export default async function login(): Promise<void> {
         }
 
         if (!shouldOverwrite) {
-            outro(pc.green('✓ Using existing API key'))
+            outro(pc.green('✓ Using existing Personal API Key'))
             skipSettingKey = true
         }
     }
@@ -54,14 +54,14 @@ export default async function login(): Promise<void> {
         const apiKey = await promptForApiKey()
 
         const s = spinner()
-        s.start('Validating API key')
+        s.start('Validating Personal API Key')
         const validationResult = await fetchProjects(apiKey)
 
         if (!validationResult.success) {
-            s.stop(pc.red('✗ Invalid API key'))
+            s.stop(pc.red('✗ Invalid Personal API Key'))
 
             if (validationResult.error === 'unauthorized') {
-                outro(pc.red('\nError: Invalid API key'))
+                outro(pc.red('\nError: Invalid Personal API Key'))
                 process.exit(1)
             } else {
                 console.error(pc.red(`\nError: ${validationResult.error}`))
@@ -70,7 +70,7 @@ export default async function login(): Promise<void> {
             }
         }
 
-        s.stop('✓ API key validated')
+        s.stop('✓ Personal API Key validated')
 
         // Create config directory if it doesn't exist
         await fs.mkdir(path.dirname(CONFIG_FILE), { recursive: true })
