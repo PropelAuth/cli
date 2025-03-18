@@ -341,7 +341,7 @@ export async function configureNextJsRedirectPaths(
     }
 
     if (needsUpdate) {
-        log.info(`Updates needed to test environment settings\n${updateMessage}`)
+        log.info(`Updates needed for the Frontend Integration settings for your test environment\n${updateMessage}`)
 
         const confirmUpdate = await confirm({
             message: 'Your test environment config needs to be updated, would you like to apply these changes now?',

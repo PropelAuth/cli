@@ -145,6 +145,8 @@ const WelcomeMessage = () => {
     return <div>Welcome to your authenticated page!</div>
 }
 
+export default WelcomeMessage
+
 export async function getServerSideProps(context) {
     const user = await getUserFromServerSideProps(context)
     if (!user) {
@@ -173,7 +175,9 @@ const WelcomeMessage = () => {
     } else {
         return <div>Please log in to be welcomed</div>
     }
-}`)}
+}
+
+export default WelcomeMessage`)}
 ${pc.dim('─────────────────────────────────────────────')}
 
 ${pc.cyan('For full documentation and more examples, visit:')}

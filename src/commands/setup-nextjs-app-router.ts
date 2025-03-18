@@ -139,6 +139,8 @@ const WelcomeMessage = async () => {
     return <div>Welcome, {user.email}!</div>
 }
 
+export default WelcomeMessage
+
 ${pc.dim('─────────────────────────────────────────────')}
 
 ${pc.bold('Client Component Example:')}
@@ -156,6 +158,8 @@ const WelcomeMessage = () => {
         return <div>Please log in to be welcomed</div>
     }
 }
+
+export default WelcomeMessage
 ${pc.dim('─────────────────────────────────────────────')}
 
 ${pc.cyan('For full documentation and more examples, visit:')}
