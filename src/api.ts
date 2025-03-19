@@ -1,18 +1,16 @@
-import { 
-    ProjectsResponse, 
-    BackendIntegrationResponse, 
+import {
+    ProjectsResponse,
+    BackendIntegrationResponse,
     FrontendIntegrationResponse,
     FrontendIntegrationRequest,
     ApiKeyRequest,
-    ApiKeyResponse
+    ApiKeyResponse,
 } from './types/api.js'
 
-const BASE_API_URL = 'https://api.propelauth.localhost/cli'
+const BASE_API_URL = 'https://api.propelauth.com/cli'
 const PROJECTS_URL = `${BASE_API_URL}/projects`
 
-export type ApiResult<T> =
-    | { success: true; data: T }
-    | { success: false; error: 'unauthorized' | string }
+export type ApiResult<T> = { success: true; data: T } | { success: false; error: 'unauthorized' | string }
 
 export type FetchProjectsResult = ApiResult<ProjectsResponse>
 export type BackendIntegrationResult = ApiResult<BackendIntegrationResponse>
@@ -21,8 +19,8 @@ export type UpdateFrontendIntegrationResult = ApiResult<{}>
 export type CreateApiKeyResult = ApiResult<ApiKeyResponse>
 
 async function makeApiRequest<T>(
-    url: string, 
-    apiKey: string, 
+    url: string,
+    apiKey: string,
     method: 'GET' | 'POST' | 'PUT' = 'GET',
     body?: object
 ): Promise<ApiResult<T>> {
@@ -32,9 +30,9 @@ async function makeApiRequest<T>(
             'Content-Type': 'application/json',
         }
 
-        const options: RequestInit = { 
+        const options: RequestInit = {
             method,
-            headers
+            headers,
         }
 
         if (body) {
@@ -56,7 +54,7 @@ async function makeApiRequest<T>(
             return { success: true, data: {} as T }
         }
 
-        const data = await response.json() as T
+        const data = (await response.json()) as T
         return { success: true, data }
     } catch (err) {
         return { success: false, error: `API request error: ${err}` }
@@ -68,8 +66,8 @@ export async function fetchProjects(apiKey: string): Promise<FetchProjectsResult
 }
 
 export async function fetchBackendIntegration(
-    apiKey: string, 
-    orgId: string, 
+    apiKey: string,
+    orgId: string,
     projectId: string
 ): Promise<BackendIntegrationResult> {
     const url = `${BASE_API_URL}/${orgId}/project/${projectId}/be_integration`
@@ -77,8 +75,8 @@ export async function fetchBackendIntegration(
 }
 
 export async function fetchFrontendIntegration(
-    apiKey: string, 
-    orgId: string, 
+    apiKey: string,
+    orgId: string,
     projectId: string
 ): Promise<FrontendIntegrationResult> {
     const url = `${BASE_API_URL}/${orgId}/project/${projectId}/fe_integration`
@@ -86,8 +84,8 @@ export async function fetchFrontendIntegration(
 }
 
 export async function updateFrontendIntegration(
-    apiKey: string, 
-    orgId: string, 
+    apiKey: string,
+    orgId: string,
     projectId: string,
     data: FrontendIntegrationRequest
 ): Promise<UpdateFrontendIntegrationResult> {
@@ -96,8 +94,8 @@ export async function updateFrontendIntegration(
 }
 
 export async function createApiKey(
-    apiKey: string, 
-    orgId: string, 
+    apiKey: string,
+    orgId: string,
     projectId: string,
     data: ApiKeyRequest
 ): Promise<CreateApiKeyResult> {
