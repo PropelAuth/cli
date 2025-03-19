@@ -1,6 +1,6 @@
 import path from 'path'
 import pc from 'picocolors'
-import { spinner, intro, outro, confirm, text, log } from '@clack/prompts'
+import { spinner, intro, outro, confirm, log } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 
 import { ensureDirectory, overwriteFileWithConfirmation } from '../helpers/fileUtils.js'
@@ -9,15 +9,15 @@ import {
     getPort,
     configureNextJsEnvironmentVariables,
     configureNextJsRedirectPaths,
-    updateAppRouterLayout,
+    updatePagesRouterApp,
 } from '../helpers/framework/nextJsUtils.js'
 import { promptForJsInstall } from '../helpers/lang/javascriptUtils.js'
 import { loadTemplateResource } from '../helpers/templateUtils.js'
 import { promptForProjectIfNeeded } from '../helpers/projectUtils.js'
 import { sleep } from '../helpers/timeUtils.js'
 
-export default async function setupNextJsAppRouter(targetDir: string): Promise<void> {
-    log.info(`${pc.cyan('Welcome!')} We'll set up PropelAuth authentication in your Next.js App Router project.`)
+export default async function setupNextJsPagesRouter(targetDir: string): Promise<void> {
+    log.info(`${pc.cyan('Welcome!')} We'll set up PropelAuth authentication in your Next.js Pages Router project.`)
 
     const targetPath = path.resolve(process.cwd(), targetDir || '.')
     const s = spinner()
@@ -30,15 +30,15 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
             process.exit(1)
         }
 
-        const { nextVersion, appRouterDir, isUsingSrcDir } = await validateNextJsProject(targetPath)
+        const { nextVersion, pagesRouterDir, isUsingSrcDir } = await validateNextJsProject(targetPath)
 
-        // Ensure that they are using the app router
-        if (!appRouterDir) {
-            outro('This project does not appear to be using the App Router.')
+        // Ensure that they are using the Pages Router
+        if (!pagesRouterDir) {
+            outro('This project does not appear to be using the Pages Router.')
             process.exit(1)
         }
 
-        log.success(`✓ Found Next.js ${nextVersion || 'unknown'} project with App Router`)
+        log.success(`✓ Found Next.js ${nextVersion || 'unknown'} project with Pages Router`)
 
         // Detect port or URL from Next.js configuration
         const portOrUrl = await getPort(targetPath)
@@ -55,6 +55,11 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
         await promptForJsInstall(targetPath, s, '@propelauth/nextjs')
         await sleep(500)
 
+        // Create app directory if needed
+        const appRouterDir = path.join(targetPath, isUsingSrcDir ? 'src/app' : 'app')
+        await ensureDirectory(appRouterDir)
+
+        // Set up auth API routes in app directory
         const authApiDir = path.join(appRouterDir, 'api', 'auth', '[slug]')
         await ensureDirectory(authApiDir)
 
@@ -72,41 +77,41 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
         log.success(`✓ Created authentication routes`)
         await sleep(500)
 
-        const middlewareContent = await loadTemplateResource('nextjs', 'middleware.ts')
-        const middlewareFilePath = path.join(targetPath, isUsingSrcDir ? 'src/middleware.ts' : 'middleware.ts')
-        await overwriteFileWithConfirmation(middlewareFilePath, middlewareContent, 'Middleware file')
-        log.success('✓ Created middleware')
-        await sleep(500)
-
-        const layoutPath = path.join(appRouterDir, 'layout.tsx')
+        const appPath = path.join(pagesRouterDir, '_app.tsx')
         try {
-            await (await import('fs')).promises.stat(layoutPath)
-            const autoUpdateSuccess = await updateAppRouterLayout(layoutPath)
-            if (!autoUpdateSuccess) {
-                // Fall back to manual instructions if automatic update fails
-                log.info(`${pc.cyan('Root Layout Changes Required:')}
+            await (await import('fs')).promises.stat(appPath)
 
-1. Add this import at the top of ${pc.cyan(layoutPath)}:
+            // Try to automatically update the _app.tsx file
+            const autoUpdateSuccess = await updatePagesRouterApp(appPath, s)
+
+            if (autoUpdateSuccess) {
+                log.success('✓ Updated _app.tsx with AuthProvider')
+                await sleep(500)
+            } else {
+                // Fall back to manual instructions if automatic update fails
+                log.info(`${pc.cyan('_app.tsx Changes Required:')}
+
+1. Add this import at the top of ${pc.cyan(appPath)}:
    ${pc.green('import { AuthProvider } from "@propelauth/nextjs/client";')}
 
-2. Wrap your children with AuthProvider:
+2. Wrap your Component with AuthProvider:
 
    ${pc.dim('Before:')}
-   ${pc.yellow('<html lang="en">')}
-     ${pc.yellow('<body>{children}</body>')}
-   ${pc.yellow('</html>')}
+   ${pc.yellow('export default function App({ Component, pageProps }: AppProps) {')}
+   ${pc.yellow('  return <Component {...pageProps} />')}
+   ${pc.yellow('}')}
 
    ${pc.dim('After:')}
-   ${pc.yellow('<html lang="en">')}
-     ${pc.yellow('<body>')}
-       ${pc.green('<AuthProvider authUrl={process.env.NEXT_PUBLIC_AUTH_URL!}>')}
-         ${pc.green('{children}')}
-       ${pc.green('</AuthProvider>')}
-     ${pc.yellow('</body>')}
-   ${pc.yellow('</html>')}`)
+   ${pc.yellow('export default function App({ Component, pageProps }: AppProps) {')}
+   ${pc.yellow('  return (')}
+   ${pc.green('    <AuthProvider authUrl={process.env.NEXT_PUBLIC_AUTH_URL!}>')}
+   ${pc.yellow('      <Component {...pageProps} />')}
+   ${pc.green('    </AuthProvider>')}
+   ${pc.yellow('  )')}
+   ${pc.yellow('}')}`)
 
                 const answer = await confirm({
-                    message: 'Have you made these changes to your root layout?',
+                    message: 'Have you made these changes to your _app.tsx?',
                     active: pc.green('yes'),
                     inactive: pc.yellow('no'),
                     initialValue: false,
@@ -116,11 +121,13 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
                     process.exit(0)
                 }
                 if (!answer) {
-                    outro(pc.yellow('⚠ Please make the required changes to your root layout.'))
+                    outro(pc.yellow('⚠ Please make the required changes to your _app.tsx.'))
                 }
+                await sleep(500)
             }
         } catch (err) {
-            outro(pc.yellow('⚠ No root layout found; skipping instructions for AuthProvider setup.'))
+            log.warn('⚠ No _app.tsx found; skipping instructions for AuthProvider setup.')
+            await sleep(500)
         }
 
         log.success('✓ PropelAuth setup completed!')
@@ -131,22 +138,33 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
 ${pc.cyan('Example Usage:')}
 ${pc.dim('─────────────────────────────────────────────')}
 
-${pc.bold('Server Component Example:')}
-import { getUserOrRedirect } from "@propelauth/nextjs/server/app-router";
+${pc.bold('Server-Side Page Example:')}
+${pc.green(`import { getUserFromServerSideProps } from "@propelauth/nextjs/server/pages";
 
-const WelcomeMessage = async () => {
-    const user = await getUserOrRedirect()
-    return <div>Welcome, {user.email}!</div>
+const WelcomeMessage = () => {
+    return <div>Welcome to your authenticated page!</div>
 }
 
 export default WelcomeMessage
 
-${pc.dim('─────────────────────────────────────────────')}
+export async function getServerSideProps(context) {
+    const user = await getUserFromServerSideProps(context)
+    if (!user) {
+        return { redirect: { destination: '/api/auth/login' } }
+    }
+    
+    return {
+        props: {
+            user: {
+                email: user.email,
+                // other user properties you need
+            },
+        },
+    }
+}`)}
 
 ${pc.bold('Client Component Example:')}
-"use client";
-
-import { useUser } from "@propelauth/nextjs/client";
+${pc.green(`import { useUser } from "@propelauth/nextjs/client";
 
 const WelcomeMessage = () => {
     const {loading, user} = useUser()
@@ -159,11 +177,11 @@ const WelcomeMessage = () => {
     }
 }
 
-export default WelcomeMessage
+export default WelcomeMessage`)}
 ${pc.dim('─────────────────────────────────────────────')}
 
 ${pc.cyan('For full documentation and more examples, visit:')}
-${pc.underline('https://docs.propelauth.com/reference/fullstack-apis/nextjsapp/installation-and-setup')}`)
+${pc.underline('https://docs.propelauth.com/reference/fullstack-apis/nextjspages/installation-and-setup')}`)
         outro(pc.green('PropelAuth has been successfully set up in your Next.js project!'))
         process.exit(0)
     } catch (error) {

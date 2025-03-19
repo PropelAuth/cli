@@ -1,7 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import pc from 'picocolors'
-import { select, outro } from '@clack/prompts'
+import { select, outro, log } from '@clack/prompts'
 import { isCancel } from '@clack/core'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
@@ -29,12 +29,20 @@ export async function detectPackageManager(targetPath: string): Promise<PackageM
     return undefined
 }
 
-export async function promptForJsInstall(
-    targetPath: string,
-    spinner: Spinner | undefined,
-    packageName: string
-): Promise<void> {
-    const s = spinner || { start: () => {}, stop: () => {} }
+export async function promptForJsInstall(targetPath: string, s: Spinner, packageName: string): Promise<void> {
+    try {
+        // Check if package is already installed
+        const packageJson = await readPackageJson(targetPath)
+        const dependencies = { ...packageJson.dependencies, ...packageJson.devDependencies }
+
+        if (dependencies[packageName]) {
+            log.info(pc.green(`Dependency ${packageName} is already installed`))
+            return
+        }
+    } catch (err) {
+        // Continue if package.json can't be read or parsed
+    }
+
     const detectedPM = await detectPackageManager(targetPath)
 
     const options = [
@@ -85,7 +93,6 @@ export async function promptForJsInstall(
     }
 
     if (choice === 'skip') {
-        s.stop('Skipped dependency installation')
         return
     }
 

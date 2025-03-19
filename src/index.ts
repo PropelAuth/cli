@@ -1,22 +1,25 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander'
-import setupNextJsAppRouter from './commands/setup-nextjs-app-router.js'
+import setup from './commands/setup.js'
 import login from './commands/login.js'
+import logout from './commands/logout.js'
 import setDefaultProject from './commands/set-default-project.js'
 import { resolvePath } from './helpers/fileUtils.js'
 
 const program = new Command()
 
-program.name('propelauth').description('CLI for setting up and debugging PropelAuth authentication').version('0.0.1')
+program.name('propelauth').description('CLI for setting up and debugging PropelAuth authentication').version('0.0.2')
 
+// Main setup command
 program
-    .command('setup-nextjs-app-router')
-    .description('Set up PropelAuth authentication in a Next.js App Router project')
+    .command('setup')
+    .description('Set up PropelAuth authentication in your project')
     .argument('[directory]', 'Target directory (defaults to current directory)')
-    .action(async (directory: string | undefined) => {
-        const resolvedPath = resolvePath(directory)
-        await setupNextJsAppRouter(resolvedPath)
+    .option('-f, --framework <framework>', 'Specify the framework (nextjs-app, nextjs-pages)')
+    .action(async (directory: string | undefined, options: { framework?: string }) => {
+        const resolvedPath = resolvePath(directory || '.')
+        await setup(resolvedPath, options)
     })
 
 program
@@ -27,12 +30,17 @@ program
     })
 
 program
+    .command('logout')
+    .description('Logout from PropelAuth')
+    .action(async () => {
+        await logout()
+    })
+
+program
     .command('set-default-project')
     .description('Set the default project to use')
     .action(async () => {
         await setDefaultProject()
     })
-
-// Note: Other commands will be converted in subsequent steps
 
 program.parseAsync()

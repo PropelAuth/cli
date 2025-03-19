@@ -1,11 +1,11 @@
 import pc from 'picocolors'
 import fs from 'fs/promises'
 import { intro, outro, spinner } from '@clack/prompts'
-import { CONFIG_FILE, getApiKey, getConfig, selectProject } from './login.js'
+import { CONFIG_FILE, getApiKey, getConfig, selectProject } from '../helpers/projectUtils.js'
 import { fetchProjects } from '../api.js'
 
 export default async function setDefaultProject(): Promise<void> {
-    intro(pc.green('Set Default Project'))
+    intro(pc.cyan('⚡ Set Default Project'))
 
     const apiKey = await getApiKey()
     if (!apiKey) {
@@ -18,29 +18,38 @@ export default async function setDefaultProject(): Promise<void> {
     const result = await fetchProjects(apiKey)
 
     if (!result.success) {
-        s.stop('Failed to fetch projects')
+        s.stop(pc.red('✗ Failed to fetch projects'))
         if (result.error === 'unauthorized') {
-            outro(pc.red('Your API key appears to be invalid. Please login again.'))
+            outro(pc.red('Your Personal API Key appears to be invalid. Please login again.'))
         } else {
             outro(pc.red(`Error: ${result.error}`))
         }
         process.exit(1)
     }
 
-    s.stop('Projects fetched successfully')
+    s.stop('✓ Projects fetched successfully')
 
     const config = await getConfig()
-    const selectedProject = await selectProject(result.data.projects, config?.selectedProject?.projectId)
+    const currentProjectId = config?.projectSelection?.option === 'use-default' 
+        ? config.projectSelection.defaultProject.projectId 
+        : undefined
+        
+    const projectSelection = await selectProject(result.data.projects, currentProjectId)
 
-    if (selectedProject) {
+    if (projectSelection) {
         const newConfig = {
             ...config,
             apiKey,
-            selectedProject,
+            projectSelection,
         }
         await fs.writeFile(CONFIG_FILE, JSON.stringify(newConfig, null, 2))
-        outro(pc.green(`Default project set to ${pc.cyan(selectedProject.displayName)}`))
+        
+        if (projectSelection.option === 'always-ask') {
+            outro(pc.green('✓ Project preference set to always ask for each command'))
+        } else {
+            outro(pc.green(`✓ Default project set to ${pc.cyan(projectSelection.defaultProject.displayName)}`))
+        }
     } else {
-        outro(pc.yellow('No projects available to select'))
+        outro(pc.yellow('⚠ No projects available to select'))
     }
 }
