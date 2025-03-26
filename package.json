@@ -1,6 +1,6 @@
 {
     "name": "@propelauth/cli",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "PropelAuth CLI tool",
     "homepage": "https://www.propelauth.com",
     "type": "module",
