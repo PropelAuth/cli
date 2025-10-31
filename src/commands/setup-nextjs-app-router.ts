@@ -72,10 +72,15 @@ export default async function setupNextJsAppRouter(targetDir: string): Promise<v
         log.success(`✓ Created authentication routes`)
         await sleep(500)
 
-        const middlewareContent = await loadTemplateResource('nextjs', 'middleware.ts')
-        const middlewareFilePath = path.join(targetPath, isUsingSrcDir ? 'src/middleware.ts' : 'middleware.ts')
-        await overwriteFileWithConfirmation(middlewareFilePath, middlewareContent, 'Middleware file')
-        log.success('✓ Created middleware')
+        const useProxy = nextMajor >= 16
+        let middlewareOrProxy = 'proxy'
+        if (!useProxy) {
+            middlewareOrProxy = 'middleware'
+        }
+        let middlewareContent = await loadTemplateResource('nextjs', `${middlewareOrProxy}.ts`)
+        let middlewareFilePath = path.join(targetPath, isUsingSrcDir ? `src/${middlewareOrProxy}.ts` : `${middlewareOrProxy}.ts`)
+        await overwriteFileWithConfirmation(middlewareFilePath, middlewareContent, `${middlewareOrProxy} file`)
+        log.success(`✓ Created ${middlewareOrProxy}`)
         await sleep(500)
 
         const layoutPath = path.join(appRouterDir, 'layout.tsx')
